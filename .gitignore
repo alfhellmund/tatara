@@ -157,6 +157,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Backups (z. B. tatara.bak aus `tatara --snapshot-globals`)
+*.bak
+
 # Spyder project settings
 .spyderproject
 .spyproject
