@@ -3,8 +3,9 @@
 #
 # Modi:
 #   tatara <NAME> [BESCHREIBUNG]  Neues Projekt unter ~/Development/<NAME> anlegen
-#   tatara --check                Globale Voraussetzungen pruefen
+#   tatara --check                Globale Voraussetzungen + optionale KI-CLIs pruefen
 #   tatara --bootstrap-globals    Fehlende globale ~/.claude/* Dateien anlegen
+#   tatara --snapshot-globals     Aktuelle ~/.claude/* Dateien als Templates sichern
 #   tatara -h | --help            Hilfe
 
 set -euo pipefail
@@ -65,7 +66,7 @@ Auf einem neuen Rechner zuerst:
 HELP
 }
 
-# === Voraussetzungen-Check ===
+# === Voraussetzungen: Pruefen + Installieren ===
 check_bd() {
   command -v bd >/dev/null 2>&1
 }
