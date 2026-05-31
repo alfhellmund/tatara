@@ -1,6 +1,6 @@
 # tatara
 
-> **Tatara** — where your new AI project begins.
+> **tatara** — where your new AI project begins.
 > *Damit beginnt dein neues KI-Projekt.*
 
 A *tatara* is the traditional Japanese smelting furnace that turns sand into
