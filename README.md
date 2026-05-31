@@ -24,9 +24,9 @@ Fehlende Tools installiert `tatara` bei Bedarf selbst (mit y/N-Rückfrage):
 
 | | macOS | Linux |
 |---|---|---|
-| **Shell** | zsh (Standard) | zsh muss vorhanden sein (`sudo apt install zsh` o. ä.) |
+| **Shell** | bash 3.2+ (vorhanden) | bash (Standard) |
 | **Paketmanager** | Homebrew | apt / dnf / pacman / zypper (oder brew) |
 | **git** | `brew install git` | via System-Paketmanager |
 | **bd** (Beads) | `brew install beads` | brew falls vorhanden, sonst offizielles [Beads-Install-Skript](https://github.com/gastownhall/beads) |
 
-Einzige nicht automatisierbare Voraussetzung: ein Paketmanager (macOS: Homebrew) bzw. zsh auf Linux.
+Einzige nicht automatisierbare Voraussetzung: ein Paketmanager (macOS: Homebrew; Linux: apt/dnf/pacman/zypper).

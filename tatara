@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 # tatara — Bootstrap fuer neue Projekte: git + Beads + Claude-Workflow
 #
 # Modi:
@@ -17,10 +17,10 @@ OS="$(uname)"
 BEADS_INSTALL_URL="https://raw.githubusercontent.com/gastownhall/beads/main/scripts/install.sh"
 
 # === Ausgabe-Helfer ===
-log()  { print -- "  -> $1"; }
-ok()   { print -- "  [ok] $1"; }
-warn() { print -- "  [warn] $1" >&2; }
-err()  { print -- "  [fehler] $1" >&2; exit 1; }
+log()  { printf '%s\n' "  -> $1"; }
+ok()   { printf '%s\n' "  [ok] $1"; }
+warn() { printf '%s\n' "  [warn] $1" >&2; }
+err()  { printf '%s\n' "  [fehler] $1" >&2; exit 1; }
 
 show_help() {
   cat <<'HELP'
@@ -58,7 +58,7 @@ GLOBALE VORAUSSETZUNGEN (geprueft vor jedem Setup)
 
 Auf einem neuen Rechner zuerst:
   macOS:  Homebrew installieren (https://brew.sh)
-  Linux:  zsh + ein Paketmanager (apt/dnf/pacman/zypper) vorhanden
+  Linux:  ein Paketmanager (apt/dnf/pacman/zypper) vorhanden
   dann:   tatara --bootstrap-globals
 HELP
 }
@@ -83,7 +83,7 @@ require_supported_os() {
 # Ja/Nein-Rueckfrage (TTY-robust). Rueckgabe 0 bei Ja.
 confirm() {
   local answer=""
-  read "answer?  $1 [y/N] " || true
+  read -rp "  $1 [y/N] " answer || true
   [[ "$answer" == [yY]* ]]
 }
 
@@ -128,7 +128,7 @@ ensure_git() {
       || err "Abgebrochen — git wird benoetigt."
   fi
   pkg_install git git git git git
-  rehash 2>/dev/null || true
+  hash -r 2>/dev/null || true
   command -v git >/dev/null 2>&1 || err "git nach Installation weiterhin nicht gefunden"
   ok "git installiert"
 }
@@ -151,12 +151,13 @@ ensure_bd() {
     log "curl -fsSL $BEADS_INSTALL_URL | bash"
     curl -fsSL "$BEADS_INSTALL_URL" | bash
   fi
-  rehash 2>/dev/null || true
+  hash -r 2>/dev/null || true
   command -v bd >/dev/null 2>&1 \
     || err "bd nach Installation nicht im PATH gefunden — ggf. neue Shell oeffnen und erneut versuchen."
   ok "bd installiert"
 }
 
+# shellcheck disable=SC2088  # ~/.claude/... sind Anzeige-Strings (kein Pfad-Expand noetig)
 missing_globals() {
   local missing=()
   [[ -f "$CLAUDE_GLOBAL_DIR/CLAUDE.md" ]] || missing+=("~/.claude/CLAUDE.md")
@@ -165,11 +166,11 @@ missing_globals() {
   for a in "${SUBAGENTS[@]}"; do
     [[ -f "$CLAUDE_GLOBAL_DIR/agents/$a.md" ]] || missing+=("~/.claude/agents/$a.md")
   done
-  print -l -- "${missing[@]}"
+  if (( ${#missing[@]} )); then printf '%s\n' "${missing[@]}"; fi
 }
 
 mode_check() {
-  print "== Pruefe Voraussetzungen =="
+  printf '%s\n' "== Pruefe Voraussetzungen =="
   local fail=0
   if check_git; then
     ok "git installiert ($(git --version 2>/dev/null))"
@@ -183,16 +184,16 @@ mode_check() {
     warn "bd fehlt — wird bei Setup automatisch via brew angeboten"
     fail=1
   fi
-  local miss=("${(@f)$(missing_globals)}")
-  if [[ ${#miss[@]} -eq 1 && -z "${miss[1]}" ]]; then
+  local miss=() line
+  while IFS= read -r line; do miss+=("$line"); done < <(missing_globals)
+  if [[ ${#miss[@]} -eq 0 ]]; then
     ok "Alle globalen ~/.claude/* Dateien vorhanden"
   else
     warn "Fehlende Globals:"
     for m in "${miss[@]}"; do
-      [[ -z "$m" ]] && continue
-      print -- "        - $m"
+      printf '%s\n' "        - $m"
     done
-    print -- "        -> tatara --bootstrap-globals"
+    printf '%s\n' "        -> tatara --bootstrap-globals"
     fail=1
   fi
   exit $fail
@@ -205,12 +206,12 @@ write_if_missing() {
     ok "behalten: $path"
     return 1
   fi
-  mkdir -p "${path:h}"
+  mkdir -p "$(dirname "$path")"
   return 0
 }
 
 mode_bootstrap_globals() {
-  print "== Bootstrap globale ~/.claude/* Dateien =="
+  printf '%s\n' "== Bootstrap globale ~/.claude/* Dateien =="
   mkdir -p "$CLAUDE_GLOBAL_DIR/agents"
 
   if write_if_missing "$CLAUDE_GLOBAL_DIR/CLAUDE.md"; then
@@ -228,36 +229,32 @@ mode_bootstrap_globals() {
     fi
   done
 
-  print ""
+  printf '%s\n' ""
   ensure_git
   ensure_bd
-  print ""
-  print "Globale Voraussetzungen sind bereit. Nutze 'tatara <name>' fuer ein neues Projekt."
+  printf '%s\n' ""
+  printf '%s\n' "Globale Voraussetzungen sind bereit. Nutze 'tatara <name>' fuer ein neues Projekt."
 }
 
 # === Mode: snapshot-globals (Skript regeneriert eigene Embedded Templates) ===
 mode_snapshot_globals() {
-  print "== Snapshot ~/.claude/* Dateien ins Skript zurueckschreiben =="
+  printf '%s\n' "== Snapshot ~/.claude/* Dateien ins Skript zurueckschreiben =="
 
   # Pre-Flight: Quellen pruefen
-  local missing=0
+  local missing_count=0
   [[ -f "$CLAUDE_GLOBAL_DIR/CLAUDE.md" ]] \
-    || { warn "fehlt: ~/.claude/CLAUDE.md"; missing=1; }
+    || { warn "fehlt: ~/.claude/CLAUDE.md"; missing_count=1; }
   [[ -f "$CLAUDE_GLOBAL_DIR/software-development-workflow.md" ]] \
-    || { warn "fehlt: ~/.claude/software-development-workflow.md"; missing=1; }
+    || { warn "fehlt: ~/.claude/software-development-workflow.md"; missing_count=1; }
   for a in "${SUBAGENTS[@]}"; do
     [[ -f "$CLAUDE_GLOBAL_DIR/agents/$a.md" ]] \
-      || { warn "fehlt: ~/.claude/agents/$a.md"; missing=1; }
+      || { warn "fehlt: ~/.claude/agents/$a.md"; missing_count=1; }
   done
-  (( missing )) && err "Snapshot abgebrochen — fehlende Quellen oben."
+  (( missing_count )) && err "Snapshot abgebrochen — fehlende Quellen oben."
 
-  # Eigenen Skriptpfad robust ermitteln
+  # Eigenen Skriptpfad robust ermitteln (folgt Symlink -> Repo-Datei)
   local script
-  if [[ -n "${ZSH_SCRIPT:-}" ]]; then
-    script="$(realpath "$ZSH_SCRIPT")"
-  else
-    script="$(realpath "$0")"
-  fi
+  script="$(realpath "${BASH_SOURCE[0]}")"
   [[ -z "$script" || ! -f "$script" ]] \
     && err "Kann eigenen Skriptpfad nicht bestimmen"
 
@@ -272,31 +269,28 @@ mode_snapshot_globals() {
   local tmpblock tmpscript
   tmpblock="$(mktemp "${TMPDIR:-/tmp}/tatara-block.XXXXXX")"
   {
-    print -- "# === BEGIN AUTO-SNAPSHOT TEMPLATES ==="
-    print -- "tpl_global_claude_md() {"
-    print -- "  cat <<'GLOBAL_CLAUDE_END'"
+    printf '%s\n' "# === BEGIN AUTO-SNAPSHOT TEMPLATES ==="
+    printf '%s\n' "tpl_global_claude_md() {"
+    printf '%s\n' "  cat <<'GLOBAL_CLAUDE_END'"
     cat "$CLAUDE_GLOBAL_DIR/CLAUDE.md"
-    print -- "GLOBAL_CLAUDE_END"
-    print -- "}"
-    print
-    print -- "tpl_global_workflow_md() {"
-    print -- "  cat <<'GLOBAL_WORKFLOW_END'"
+    printf '%s\n' "GLOBAL_CLAUDE_END"
+    printf '%s\n' "}"
+    printf '\n'
+    printf '%s\n' "tpl_global_workflow_md() {"
+    printf '%s\n' "  cat <<'GLOBAL_WORKFLOW_END'"
     cat "$CLAUDE_GLOBAL_DIR/software-development-workflow.md"
-    print -- "GLOBAL_WORKFLOW_END"
-    print -- "}"
-    local last_idx=${#SUBAGENTS[@]}
-    local i=1
+    printf '%s\n' "GLOBAL_WORKFLOW_END"
+    printf '%s\n' "}"
     for a in "${SUBAGENTS[@]}"; do
-      print
+      printf '\n'
       local fn="${a//-/_}"
-      print -- "tpl_agent_${fn}() {"
-      print -- "  cat <<'AGENT_END'"
+      printf '%s\n' "tpl_agent_${fn}() {"
+      printf '%s\n' "  cat <<'AGENT_END'"
       cat "$CLAUDE_GLOBAL_DIR/agents/$a.md"
-      print -- "AGENT_END"
-      print -- "}"
-      i=$((i+1))
+      printf '%s\n' "AGENT_END"
+      printf '%s\n' "}"
     done
-    print -- "# === END AUTO-SNAPSHOT TEMPLATES ==="
+    printf '%s\n' "# === END AUTO-SNAPSHOT TEMPLATES ==="
   } > "$tmpblock"
 
   # Skript zusammensetzen: pre + neuer Block + post
@@ -322,15 +316,15 @@ mode_snapshot_globals() {
     state == "post" { print }
   ' "$script" > "$tmpscript"
 
-  # Validierung: Marker vorhanden + zsh-Syntax-Check
+  # Validierung: Marker vorhanden + bash-Syntax-Check
   if ! grep -q "BEGIN AUTO-SNAPSHOT TEMPLATES" "$tmpscript" \
      || ! grep -q "END AUTO-SNAPSHOT TEMPLATES" "$tmpscript"; then
     rm -f "$tmpblock" "$tmpscript"
     err "Validierung fehlgeschlagen — Marker im neuen Skript nicht gefunden. Original unveraendert."
   fi
-  if ! zsh -n "$tmpscript" 2>/dev/null; then
+  if ! bash -n "$tmpscript" 2>/dev/null; then
     rm -f "$tmpblock" "$tmpscript"
-    err "Syntax-Check (zsh -n) fehlgeschlagen — neues Skript verworfen. Original unveraendert."
+    err "Syntax-Check (bash -n) fehlgeschlagen — neues Skript verworfen. Original unveraendert."
   fi
 
   # Atomic mv
@@ -339,8 +333,8 @@ mode_snapshot_globals() {
   rm -f "$tmpblock"
 
   ok "Snapshot eingespielt"
-  print ""
-  print "Unterschied gegen Backup: diff \"$script.bak\" \"$script\""
+  printf '%s\n' ""
+  printf '%s\n' "Unterschied gegen Backup: diff \"$script.bak\" \"$script\""
 }
 
 # === Mode: neues Projekt ===
@@ -359,17 +353,17 @@ mode_tatara() {
   # Pre-Flight
   ensure_git
   ensure_bd
-  local miss=("${(@f)$(missing_globals)}")
-  if [[ ${#miss[@]} -gt 1 || -n "${miss[1]:-}" ]]; then
+  local miss=() line
+  while IFS= read -r line; do miss+=("$line"); done < <(missing_globals)
+  if [[ ${#miss[@]} -gt 0 ]]; then
     warn "Globale Voraussetzungen unvollstaendig:"
     for m in "${miss[@]}"; do
-      [[ -z "$m" ]] && continue
-      print -- "        - $m"
+      printf '%s\n' "        - $m"
     done
     err "Lauf zuerst: tatara --bootstrap-globals"
   fi
 
-  print "== Lege Projekt '$name' an =="
+  printf '%s\n' "== Lege Projekt '$name' an =="
   log "Verzeichnis: $target"
   mkdir -p "$target"
   cd "$target"
@@ -404,13 +398,13 @@ mode_tatara() {
   git add -A
   git commit -q -m "init: initial project scaffolding"
 
-  print ""
+  printf '%s\n' ""
   ok "Projekt '$name' bereit: $target"
-  print ""
-  print "Naechste Schritte:"
-  print "  cd $target"
-  print "  # Stack/Sprache + Build-Kommandos in CLAUDE.md ergaenzen"
-  print "  # Erste Beads-Issues anlegen: bd create 'Setup XYZ' --type task"
+  printf '%s\n' ""
+  printf '%s\n' "Naechste Schritte:"
+  printf '%s\n' "  cd $target"
+  printf '%s\n' "  # Stack/Sprache + Build-Kommandos in CLAUDE.md ergaenzen"
+  printf '%s\n' "  # Erste Beads-Issues anlegen: bd create 'Setup XYZ' --type task"
 }
 
 # ============================================================================
@@ -421,12 +415,9 @@ mode_tatara() {
 
 tpl_readme_md() {
   local name="$1" desc="$2"
-  print -- "# $name"
-  print
-  [[ -n "$desc" ]] && { print -- "$desc"; print; }
-  print -- "## Setup"
-  print
-  print -- "_Setup-Schritte fuer dieses Projekt eintragen._"
+  printf '# %s\n\n' "$name"
+  [[ -n "$desc" ]] && printf '%s\n\n' "$desc"
+  printf '## Setup\n\n_Setup-Schritte fuer dieses Projekt eintragen._\n'
 }
 
 tpl_project_claude_md() {
