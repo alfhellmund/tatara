@@ -1,11 +1,11 @@
 #!/usr/bin/env zsh
-# new-project — Bootstrap fuer neue Projekte: git + Beads + Claude-Workflow
+# tatara — Bootstrap fuer neue Projekte: git + Beads + Claude-Workflow
 #
 # Modi:
-#   new-project <NAME> [BESCHREIBUNG]  Neues Projekt unter ~/Development/<NAME> anlegen
-#   new-project --check                Globale Voraussetzungen pruefen
-#   new-project --bootstrap-globals    Fehlende globale ~/.claude/* Dateien anlegen
-#   new-project -h | --help            Hilfe
+#   tatara <NAME> [BESCHREIBUNG]  Neues Projekt unter ~/Development/<NAME> anlegen
+#   tatara --check                Globale Voraussetzungen pruefen
+#   tatara --bootstrap-globals    Fehlende globale ~/.claude/* Dateien anlegen
+#   tatara -h | --help            Hilfe
 
 set -euo pipefail
 
@@ -22,15 +22,15 @@ err()  { print -- "  [fehler] $1" >&2; exit 1; }
 
 show_help() {
   cat <<'HELP'
-new-project — Bootstrap fuer neue Projekte mit Git + Beads + Claude-Workflow.
+tatara — Bootstrap fuer neue Projekte mit Git + Beads + Claude-Workflow.
 
 NUTZUNG
-  new-project <NAME> [BESCHREIBUNG]   Neues Projekt unter ~/Development/<NAME> anlegen
-  new-project --check                 Globale Voraussetzungen pruefen
-  new-project --bootstrap-globals     Fehlende globale ~/.claude/* Dateien anlegen
-  new-project --snapshot-globals      Aktuelle ~/.claude/* Dateien als Templates ins
+  tatara <NAME> [BESCHREIBUNG]   Neues Projekt unter ~/Development/<NAME> anlegen
+  tatara --check                 Globale Voraussetzungen pruefen
+  tatara --bootstrap-globals     Fehlende globale ~/.claude/* Dateien anlegen
+  tatara --snapshot-globals      Aktuelle ~/.claude/* Dateien als Templates ins
                                       Skript zurueckschreiben (Backup als .bak)
-  new-project -h | --help             Diese Hilfe
+  tatara -h | --help             Diese Hilfe
 
 PROJEKT-LAYOUT
   ~/Development/<NAME>/
@@ -52,7 +52,7 @@ GLOBALE VORAUSSETZUNGEN (geprueft vor jedem Setup)
 
 Auf einem neuen Rechner zuerst:
   brew install beads
-  new-project --bootstrap-globals
+  tatara --bootstrap-globals
 HELP
 }
 
@@ -90,7 +90,7 @@ mode_check() {
       [[ -z "$m" ]] && continue
       print -- "        - $m"
     done
-    print -- "        -> new-project --bootstrap-globals"
+    print -- "        -> tatara --bootstrap-globals"
     fail=1
   fi
   exit $fail
@@ -131,7 +131,7 @@ mode_bootstrap_globals() {
     warn "bd fehlt noch — installiere mit: brew install beads"
   fi
   print ""
-  print "Globale Voraussetzungen sind bereit. Nutze 'new-project <name>' fuer ein neues Projekt."
+  print "Globale Voraussetzungen sind bereit. Nutze 'tatara <name>' fuer ein neues Projekt."
 }
 
 # === Mode: snapshot-globals (Skript regeneriert eigene Embedded Templates) ===
@@ -169,7 +169,7 @@ mode_snapshot_globals() {
 
   # Neuen Templates-Block in Temp-Datei aufbauen
   local tmpblock tmpscript
-  tmpblock="$(mktemp -t newproject-block.XXXXXX)"
+  tmpblock="$(mktemp -t tatara-block.XXXXXX)"
   {
     print -- "# === BEGIN AUTO-SNAPSHOT TEMPLATES ==="
     print -- "tpl_global_claude_md() {"
@@ -199,7 +199,7 @@ mode_snapshot_globals() {
   } > "$tmpblock"
 
   # Skript zusammensetzen: pre + neuer Block + post
-  tmpscript="$(mktemp -t newproject-script.XXXXXX)"
+  tmpscript="$(mktemp -t tatara-script.XXXXXX)"
   awk -v blockfile="$tmpblock" '
     BEGIN { state = "pre" }
     state == "pre" {
@@ -243,11 +243,11 @@ mode_snapshot_globals() {
 }
 
 # === Mode: neues Projekt ===
-mode_new_project() {
+mode_tatara() {
   local name="$1"
   local desc="${2:-}"
 
-  [[ -z "$name" ]] && err "Projektname erforderlich. Nutze 'new-project -h' fuer Hilfe."
+  [[ -z "$name" ]] && err "Projektname erforderlich. Nutze 'tatara -h' fuer Hilfe."
   [[ "$name" == *"/"* ]] && err "Projektname darf kein / enthalten"
   [[ "$name" == *" "* ]] && err "Projektname darf keine Leerzeichen enthalten"
   [[ "$name" == .* ]]    && err "Projektname darf nicht mit . beginnen"
@@ -264,7 +264,7 @@ mode_new_project() {
       [[ -z "$m" ]] && continue
       print -- "        - $m"
     done
-    err "Lauf zuerst: new-project --bootstrap-globals"
+    err "Lauf zuerst: tatara --bootstrap-globals"
   fi
 
   print "== Lege Projekt '$name' an =="
@@ -1450,10 +1450,10 @@ main() {
       exit 1
       ;;
     --*)
-      err "Unbekannte Option: $1. Nutze 'new-project -h' fuer Hilfe."
+      err "Unbekannte Option: $1. Nutze 'tatara -h' fuer Hilfe."
       ;;
     *)
-      mode_new_project "$@"
+      mode_tatara "$@"
       ;;
   esac
 }
