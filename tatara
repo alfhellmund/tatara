@@ -13,12 +13,14 @@ set -euo pipefail
 PROJECTS_ROOT="${PROJECTS_ROOT:-$HOME/Development}"
 CLAUDE_GLOBAL_DIR="$HOME/.claude"
 SUBAGENTS=(architect architect-reviewer developer qa-reviewer security-reviewer test-writer)
+AI_CLIS=(claude gemini codex)   # optionale KI-CLIs, nur Soft-Check in --check
 OS="$(uname)"
 BEADS_INSTALL_URL="https://raw.githubusercontent.com/gastownhall/beads/main/scripts/install.sh"
 
 # === Ausgabe-Helfer ===
 log()  { printf '%s\n' "  -> $1"; }
 ok()   { printf '%s\n' "  [ok] $1"; }
+info() { printf '%s\n' "  [info] $1"; }
 warn() { printf '%s\n' "  [warn] $1" >&2; }
 err()  { printf '%s\n' "  [fehler] $1" >&2; exit 1; }
 
@@ -28,7 +30,7 @@ tatara — Bootstrap fuer neue Projekte mit Git + Beads + Claude-Workflow.
 
 NUTZUNG
   tatara <NAME> [BESCHREIBUNG]   Neues Projekt unter ~/Development/<NAME> anlegen
-  tatara --check                 Globale Voraussetzungen pruefen
+  tatara --check                 Globale Voraussetzungen + optionale KI-CLIs pruefen
   tatara --bootstrap-globals     Fehlende globale ~/.claude/* Dateien anlegen
   tatara --snapshot-globals      Aktuelle ~/.claude/* Dateien als Templates ins
                                       Skript zurueckschreiben (Backup als .bak)
@@ -196,6 +198,15 @@ mode_check() {
     printf '%s\n' "        -> tatara --bootstrap-globals"
     fail=1
   fi
+  # Optionale KI-CLIs (Soft-Check, beeinflusst Exit-Code nicht)
+  local cli
+  for cli in "${AI_CLIS[@]}"; do
+    if command -v "$cli" >/dev/null 2>&1; then
+      info "$cli: gefunden"
+    else
+      info "$cli: nicht gefunden"
+    fi
+  done
   exit $fail
 }
 
