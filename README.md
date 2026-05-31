@@ -1,7 +1,7 @@
 # tatara
 
-> **Tatara** — the furnace that forges your new project.
-> *Der Schmelzofen, in dem dein neues Projekt entsteht.*
+> **Tatara** — where your new AI project begins.
+> *Damit beginnt dein neues KI-Projekt.*
 
 A *tatara* is the traditional Japanese smelting furnace that turns sand into
 tamahagane steel. This script is that furnace for software projects: one command
