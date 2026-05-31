@@ -64,9 +64,9 @@ prerequisite you install yourself is a package manager (macOS: Homebrew).
 `tatara --check` also reports whether the optional AI CLIs `claude`, `gemini` and
 `codex` are on your `PATH` — purely informational, it never installs them.
 
-### License
+### Author & License
 
-MIT — see [LICENSE](LICENSE).
+Made by **Alf Hellmund**. MIT — see [LICENSE](LICENSE).
 
 ---
 
@@ -124,6 +124,6 @@ Paketmanager (macOS: Homebrew).
 `tatara --check` meldet zusätzlich, ob die optionalen KI-CLIs `claude`, `gemini`
 und `codex` im `PATH` sind — rein informativ, es installiert sie nie.
 
-### Lizenz
+### Autor & Lizenz
 
-MIT — siehe [LICENSE](LICENSE).
+Von **Alf Hellmund**. MIT — siehe [LICENSE](LICENSE).

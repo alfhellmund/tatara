@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # tatara — Bootstrap fuer neue Projekte: git + Beads + Claude-Workflow
+# Autor: Alf Hellmund · MIT-Lizenz
 #
 # Modi:
 #   tatara <NAME> [BESCHREIBUNG]  Neues Projekt unter ~/Development/<NAME> anlegen
