@@ -15,3 +15,18 @@ tatara --bootstrap-globals     Fehlende globale ~/.claude/* Dateien anlegen
 tatara --snapshot-globals      Aktuelle ~/.claude/* Dateien als Templates sichern
 tatara -h | --help             Hilfe
 ```
+
+## Plattform & Voraussetzungen
+
+Läuft auf **macOS** und **Linux**. Windows wird über **WSL** unterstützt (kein nativer Port).
+
+Fehlende Tools installiert `tatara` bei Bedarf selbst (mit y/N-Rückfrage):
+
+| | macOS | Linux |
+|---|---|---|
+| **Shell** | zsh (Standard) | zsh muss vorhanden sein (`sudo apt install zsh` o. ä.) |
+| **Paketmanager** | Homebrew | apt / dnf / pacman / zypper (oder brew) |
+| **git** | `brew install git` | via System-Paketmanager |
+| **bd** (Beads) | `brew install beads` | brew falls vorhanden, sonst offizielles [Beads-Install-Skript](https://github.com/gastownhall/beads) |
+
+Einzige nicht automatisierbare Voraussetzung: ein Paketmanager (macOS: Homebrew) bzw. zsh auf Linux.

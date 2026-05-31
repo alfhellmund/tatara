@@ -13,6 +13,8 @@ set -euo pipefail
 PROJECTS_ROOT="${PROJECTS_ROOT:-$HOME/Development}"
 CLAUDE_GLOBAL_DIR="$HOME/.claude"
 SUBAGENTS=(architect architect-reviewer developer qa-reviewer security-reviewer test-writer)
+OS="$(uname)"
+BEADS_INSTALL_URL="https://raw.githubusercontent.com/gastownhall/beads/main/scripts/install.sh"
 
 # === Ausgabe-Helfer ===
 log()  { print -- "  -> $1"; }
@@ -44,17 +46,20 @@ PROJEKT-LAYOUT
     README.md                          Minimal mit Name + Beschreibung
 
 GLOBALE VORAUSSETZUNGEN (geprueft vor jedem Setup)
-  Homebrew                             https://brew.sh — Pflicht; git und bd werden
-                                       bei Bedarf automatisch (mit Rueckfrage) installiert
+  Plattform                            macOS oder Linux (Windows: via WSL)
+  Paketmanager                         macOS: Homebrew (https://brew.sh)
+                                       Linux: apt / dnf / pacman / zypper (oder brew)
   git, bd                              fehlen sie, bietet tatara die Installation an
+                                       (bd auf Linux via brew oder offizielles Skript)
   ~/.claude/CLAUDE.md                  Globale Workflow-Regeln
   ~/.claude/software-development-workflow.md
   ~/.claude/agents/<6 Subagenten>.md   architect, architect-reviewer, developer,
                                        qa-reviewer, security-reviewer, test-writer
 
 Auf einem neuen Rechner zuerst:
-  Homebrew installieren (https://brew.sh) — git und bd zieht tatara dann selbst
-  tatara --bootstrap-globals
+  macOS:  Homebrew installieren (https://brew.sh)
+  Linux:  zsh + ein Paketmanager (apt/dnf/pacman/zypper) vorhanden
+  dann:   tatara --bootstrap-globals
 HELP
 }
 
@@ -67,26 +72,90 @@ check_git() {
   command -v git >/dev/null 2>&1
 }
 
-# Stellt sicher, dass ein CLI-Tool vorhanden ist; installiert es sonst via
-# Homebrew (mit Rueckfrage). $1 Befehl, $2 Brew-Formula, $3 optionaler
-# Zusatz-Hinweis, falls Homebrew selbst fehlt.
-ensure_tool() {
-  local cmd="$1" formula="$2" hint="${3:-}"
-  command -v "$cmd" >/dev/null 2>&1 && return 0
-  if ! command -v brew >/dev/null 2>&1; then
-    err "$cmd fehlt und Homebrew ist nicht installiert.${hint:+ $hint} Installiere Homebrew: https://brew.sh"
-  fi
-  local answer=""
-  read "answer?  $cmd fehlt — jetzt via 'brew install $formula' installieren? [y/N] " || true
-  [[ "$answer" == [yY]* ]] || err "Abgebrochen — $cmd wird benoetigt."
-  log "brew install $formula"
-  brew install "$formula" || err "brew install $formula fehlgeschlagen"
-  command -v "$cmd" >/dev/null 2>&1 || err "$cmd nach Installation weiterhin nicht gefunden"
-  ok "$cmd installiert"
+# Bricht ab, wenn die Plattform nicht unterstuetzt wird.
+require_supported_os() {
+  case "$OS" in
+    Darwin|Linux) : ;;
+    *) err "tatara unterstuetzt derzeit macOS und Linux. Windows: bitte via WSL ausfuehren." ;;
+  esac
 }
 
-ensure_bd()  { ensure_tool bd  beads; }
-ensure_git() { ensure_tool git git "Alternativ: xcode-select --install"; }
+# Ja/Nein-Rueckfrage (TTY-robust). Rueckgabe 0 bei Ja.
+confirm() {
+  local answer=""
+  read "answer?  $1 [y/N] " || true
+  [[ "$answer" == [yY]* ]]
+}
+
+# Installiert ein Paket plattformabhaengig.
+# $1 Anzeigename, $2 brew-Formula, $3 apt-Pkg, $4 dnf/zypper-Pkg, $5 pacman-Pkg
+pkg_install() {
+  local name="$1" brewf="$2" aptp="$3" dnfp="$4" pacp="$5"
+  case "$OS" in
+    Darwin)
+      command -v brew >/dev/null 2>&1 \
+        || err "$name fehlt und Homebrew ist nicht installiert. Installiere Homebrew: https://brew.sh"
+      log "brew install $brewf"
+      brew install "$brewf"
+      ;;
+    Linux)
+      if   command -v apt-get >/dev/null 2>&1; then
+        log "sudo apt-get install -y $aptp"
+        sudo apt-get update -qq && sudo apt-get install -y "$aptp"
+      elif command -v dnf >/dev/null 2>&1; then
+        log "sudo dnf install -y $dnfp"; sudo dnf install -y "$dnfp"
+      elif command -v pacman >/dev/null 2>&1; then
+        log "sudo pacman -S --noconfirm $pacp"; sudo pacman -S --noconfirm "$pacp"
+      elif command -v zypper >/dev/null 2>&1; then
+        log "sudo zypper install -y $dnfp"; sudo zypper install -y "$dnfp"
+      elif command -v brew >/dev/null 2>&1; then
+        log "brew install $brewf"; brew install "$brewf"
+      else
+        err "$name fehlt und kein unterstuetzter Paketmanager (apt/dnf/pacman/zypper/brew) gefunden."
+      fi
+      ;;
+  esac
+}
+
+# git: ueberall via System-Paketmanager (bzw. brew).
+ensure_git() {
+  command -v git >/dev/null 2>&1 && return 0
+  if [[ "$OS" == Darwin ]]; then
+    confirm "git fehlt — via Homebrew installieren?" \
+      || err "Abgebrochen — git wird benoetigt. (Alternativ: xcode-select --install)"
+  else
+    confirm "git fehlt — via System-Paketmanager installieren (sudo)?" \
+      || err "Abgebrochen — git wird benoetigt."
+  fi
+  pkg_install git git git git git
+  rehash 2>/dev/null || true
+  command -v git >/dev/null 2>&1 || err "git nach Installation weiterhin nicht gefunden"
+  ok "git installiert"
+}
+
+# bd: macOS via brew; Linux via brew (falls vorhanden), sonst offizielles
+# Beads-Install-Skript (curl | bash). bd ist nicht in apt/dnf/pacman.
+ensure_bd() {
+  command -v bd >/dev/null 2>&1 && return 0
+  if [[ "$OS" == Darwin ]] || command -v brew >/dev/null 2>&1; then
+    command -v brew >/dev/null 2>&1 \
+      || err "bd fehlt und Homebrew ist nicht installiert. Installiere Homebrew: https://brew.sh"
+    confirm "bd fehlt — via 'brew install beads' installieren?" \
+      || err "Abgebrochen — bd wird benoetigt."
+    log "brew install beads"
+    brew install beads
+  else
+    warn "bd ist nicht in System-Paketmanagern verfuegbar."
+    confirm "bd via offizielles Beads-Skript installieren (curl | bash von gastownhall/beads)?" \
+      || err "Abgebrochen — bd wird benoetigt. Manuell: npm install -g @beads/bd"
+    log "curl -fsSL $BEADS_INSTALL_URL | bash"
+    curl -fsSL "$BEADS_INSTALL_URL" | bash
+  fi
+  rehash 2>/dev/null || true
+  command -v bd >/dev/null 2>&1 \
+    || err "bd nach Installation nicht im PATH gefunden — ggf. neue Shell oeffnen und erneut versuchen."
+  ok "bd installiert"
+}
 
 missing_globals() {
   local missing=()
@@ -201,7 +270,7 @@ mode_snapshot_globals() {
 
   # Neuen Templates-Block in Temp-Datei aufbauen
   local tmpblock tmpscript
-  tmpblock="$(mktemp -t tatara-block.XXXXXX)"
+  tmpblock="$(mktemp "${TMPDIR:-/tmp}/tatara-block.XXXXXX")"
   {
     print -- "# === BEGIN AUTO-SNAPSHOT TEMPLATES ==="
     print -- "tpl_global_claude_md() {"
@@ -231,7 +300,7 @@ mode_snapshot_globals() {
   } > "$tmpblock"
 
   # Skript zusammensetzen: pre + neuer Block + post
-  tmpscript="$(mktemp -t tatara-script.XXXXXX)"
+  tmpscript="$(mktemp "${TMPDIR:-/tmp}/tatara-script.XXXXXX")"
   awk -v blockfile="$tmpblock" '
     BEGIN { state = "pre" }
     state == "pre" {
@@ -1465,6 +1534,7 @@ AGENT_END
 # ============================================================================
 
 main() {
+  require_supported_os
   case "${1:-}" in
     -h|--help)
       show_help
