@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# bd-Stub fuer tatara-Tests.
+# No-op: ensure_bd prueft nur ob bd im PATH ist; dieser Stub genuegt.
+case "${1:-}" in
+    --version)
+        printf '%s\n' "bd stub 0.0.0"
+        ;;
+    *)
+        # Alle anderen bd-Aufrufe: Erfolg ohne Ausgabe
+        ;;
+esac
+exit 0

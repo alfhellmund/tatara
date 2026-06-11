@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# claude-Stub fuer tatara-Tests.
+# Verhaltenssteuerung via ENV-Variablen:
+#   CLAUDE_STUB_LOGGED_IN=1  -> auth status liefert loggedIn:true mit Privacy-Markern
+#   CLAUDE_STUB_LOGGED_IN=0  -> auth status liefert {"loggedIn":false}
+#   CLAUDE_STUB_FABLE=ok     -> -p-Probe liefert success-JSON
+#   CLAUDE_STUB_FABLE=denied -> -p-Probe liefert is_error:true-JSON
+#   CLAUDE_STUB_FABLE=garbage-> -p-Probe liefert Nicht-JSON-Text
+# Jeder Aufruf wird an $CLAUDE_STUB_LOG angehängt (wenn gesetzt).
+
+# Alle Argumente loggen (fuer "kein -p-Call"-Assertions)
+if [[ -n "${CLAUDE_STUB_LOG:-}" ]]; then
+    printf '"%s"\n' "$*" >> "$CLAUDE_STUB_LOG"
+fi
+
+# Argument-Routing
+case "${1:-}" in
+    auth)
+        # auth status
+        if [[ "${CLAUDE_STUB_LOGGED_IN:-0}" == "1" ]]; then
+            # loggedIn:true + Privacy-Marker, die AK-18 prueft
+            printf '%s\n' '{"loggedIn":true,"subscriptionType":"max","email":"x@y.z","orgId":"ORG-SECRET"}'
+        else
+            printf '%s\n' '{"loggedIn":false}'
+        fi
+        exit 0
+        ;;
+    -p)
+        # Probe-Call: claude -p <prompt> [weitere args]
+        case "${CLAUDE_STUB_FABLE:-ok}" in
+            ok)
+                printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok"}'
+                ;;
+            denied)
+                printf '%s\n' '{"type":"result","subtype":"success","is_error":true,"result":"There'"'"'s an issue with the selected model (fable)..."}'
+                ;;
+            garbage)
+                printf '%s\n' 'this is not json at all!!!'
+                ;;
+        esac
+        exit 0
+        ;;
+    --version)
+        printf '%s\n' "claude stub 0.0.0"
+        exit 0
+        ;;
+    *)
+        # Unbekannte Aufrufe -> Fehler damit Tests nicht versehentlich gruenwerden
+        printf '%s\n' "claude-stub: unbekannter Aufruf: $*" >&2
+        exit 1
+        ;;
+esac

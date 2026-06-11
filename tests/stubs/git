@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# git-Stub fuer tatara-Tests.
+# No-op: ensure_git prueft nur ob git im PATH ist; dieser Stub genuegt.
+case "${1:-}" in
+    --version)
+        printf '%s\n' "git version 99.0.0-stub"
+        ;;
+    init|add|commit)
+        # Schweigend erfolgreich
+        ;;
+    *)
+        # Alle anderen git-Aufrufe: Erfolg ohne Ausgabe
+        ;;
+esac
+exit 0
