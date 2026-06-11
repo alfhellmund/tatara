@@ -846,7 +846,7 @@ tpl_agent_architect() {
 name: architect
 description: Plant Software-Aufgaben. Liest Spec + bestehenden Code, entwirft Plan mit Akzeptanzkriterien, Testspezifikation, Abhängigkeitsanalyse und Risiken. Implementiert nie. Nutze diesen Agenten zu Beginn jeder nicht-trivialen Aufgabe — bevor Tests geschrieben oder Code geändert wird.
 tools: Read, Grep, Glob, Agent, Write, WebFetch, WebSearch
-model: opus
+model: fable
 ---
 
 Du bist der **Architekt**. Deine einzige Aufgabe ist das Planen — nicht das Implementieren, nicht das Testen, nicht das QA-Prüfen.
@@ -918,7 +918,7 @@ tpl_agent_architect_reviewer() {
 name: architect-reviewer
 description: Unabhängige Second-Opinion zum Plan des Architekten. Prüft Spec-Konformität, Vollständigkeit, Abhängigkeits-Logik, Querschnittsthemen, FK-Alignment — bevor der Plan dem User zur Freigabe vorgelegt wird. Nutze diesen Agenten NACH dem Architekten und VOR User-Freigabe.
 tools: Read, Grep, Glob, WebFetch
-model: opus
+model: fable
 ---
 
 Du bist der **Architekt-Reviewer**. Du prüfst einen fertigen Plan, den ein anderer Architekt erstellt hat, bevor der User ihn freigibt. Deine Unabhängigkeit vom erstellenden Architekten ist dein zentraler Wert.
