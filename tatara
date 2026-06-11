@@ -60,6 +60,12 @@ GLOBALE VORAUSSETZUNGEN (geprueft vor jedem Setup)
   ~/.claude/agents/<6 Subagenten>.md   architect, architect-reviewer, developer,
                                        qa-reviewer, security-reviewer, test-writer
 
+UMGEBUNGSVARIABLEN
+  TATARA_ARCHITECT_MODEL           Architekt-Modell erzwingen: fable | opus
+                                   Default: Auto-Erkennung via fable-Verfuegbarkeit
+  PROJECTS_ROOT                    Basisverzeichnis fuer neue Projekte
+                                   Default: ~/Development
+
 Auf einem neuen Rechner zuerst:
   macOS:  Homebrew installieren (https://brew.sh)
   Linux:  ein Paketmanager (apt/dnf/pacman/zypper) vorhanden
@@ -173,6 +179,94 @@ missing_globals() {
   if (( ${#missing[@]} )); then printf '%s\n' "${missing[@]}"; fi
 }
 
+# stdin -> stdout: ersetzt nur das ERSTE exakte Vorkommen der Zeile 'model: fable'
+# durch 'model: opus'. Alle anderen Zeilen (inkl. weiterer Vorkommen) bleiben unveraendert.
+substitute_architect_model() {
+  awk '!d && $0=="model: fable"{$0="model: opus";d=1}{print}'
+}
+
+# Prueft ob fable als Architekt-Modell verfuegbar ist.
+# stdout: exakter Slug (available | no-claude | not-logged-in | probe-failed)
+# exit:   0 nur bei 'available', sonst 1
+# Hinweis: Security: Auth-Daten (claude auth status) werden NIE ausgegeben.
+fable_available() {
+  if ! command -v claude >/dev/null 2>&1; then
+    echo "no-claude"
+    return 1
+  fi
+
+  local auth_out
+  auth_out="$(claude auth status </dev/null 2>/dev/null || true)"
+
+  # loggedIn whitespace-tolerant pruefen
+  if ! printf '%s' "$auth_out" | grep -Eq '"loggedIn"[[:space:]]*:[[:space:]]*true'; then
+    echo "not-logged-in"
+    return 1
+  fi
+
+  local probe_out
+  probe_out="$(claude -p --model fable --output-format json "ok" </dev/null 2>/dev/null || true)"
+
+  # JSON-Parsing: versuche jq; bei exit 127 (not found) Fallback auf grep.
+  # Beide Bool-Felder whitespace-tolerant pruefen.
+  local is_ok=0
+  local jq_exit
+  printf '%s' "$probe_out" | jq -e '.is_error == false and .subtype == "success"' >/dev/null 2>&1
+  jq_exit=$?
+  if [[ $jq_exit -eq 127 ]]; then
+    # jq nicht gefunden -> grep-Fallback
+    if printf '%s' "$probe_out" | grep -Eq '"is_error"[[:space:]]*:[[:space:]]*false' \
+       && printf '%s' "$probe_out" | grep -Eq '"subtype"[[:space:]]*:[[:space:]]*"success"'; then
+      is_ok=1
+    fi
+  elif [[ $jq_exit -eq 0 ]]; then
+    is_ok=1
+  fi
+
+  if [[ $is_ok -eq 1 ]]; then
+    echo "available"
+    return 0
+  else
+    echo "probe-failed"
+    return 1
+  fi
+}
+
+# Ermittelt das zu nutzende Architekt-Modell.
+# stdout: '<modell> <quelle> [<slug>]'  (z.B. 'fable auto' | 'opus fallback no-claude' | 'opus override')
+# exit:   0 immer ausser bei ungueltigem TATARA_ARCHITECT_MODEL (dann return 1, kein stdout)
+resolve_architect_model() {
+  local env_val="${TATARA_ARCHITECT_MODEL:-}"
+
+  if [[ -n "$env_val" ]]; then
+    case "$env_val" in
+      fable)
+        echo "fable override"
+        return 0
+        ;;
+      opus)
+        echo "opus override"
+        return 0
+        ;;
+      *)
+        # Kein Output hier — Aufrufer gibt Fehlermeldung aus (AK-8-unit: stdout vor EXIT: muss leer sein)
+        return 1
+        ;;
+    esac
+  fi
+
+  # Auto-Erkennung via fable_available
+  local slug
+  slug="$(fable_available)"
+  local fa_exit=$?
+  if [[ $fa_exit -eq 0 ]]; then
+    echo "fable auto"
+  else
+    echo "opus fallback $slug"
+  fi
+  return 0
+}
+
 mode_check() {
   printf '%s\n' "== Pruefe Voraussetzungen =="
   local fail=0
@@ -209,6 +303,33 @@ mode_check() {
       info "$cli: nicht gefunden"
     fi
   done
+
+  # Architekt-Modell-Policy (Soft-Check, KEIN claude -p Probe-Call)
+  local env_val="${TATARA_ARCHITECT_MODEL:-}"
+  if [[ -n "$env_val" ]]; then
+    case "$env_val" in
+      fable|opus)
+        info "Architekt-Modell: $env_val (Quelle: override via TATARA_ARCHITECT_MODEL)"
+        ;;
+      *)
+        warn "TATARA_ARCHITECT_MODEL='$env_val' ist ungueltig — erlaubt: fable, opus"
+        fail=1
+        ;;
+    esac
+  else
+    if ! command -v claude >/dev/null 2>&1; then
+      info "Architekt-Modell: opus (claude nicht verfuegbar)"
+    else
+      local auth_out
+      auth_out="$(claude auth status </dev/null 2>/dev/null || true)"
+      if ! printf '%s' "$auth_out" | grep -Eq '"loggedIn"[[:space:]]*:[[:space:]]*true'; then
+        info "Architekt-Modell: opus (nicht eingeloggt)"
+      else
+        info "Architekt-Modell: fable falls verfuegbar, sonst opus (final beim Bootstrap ermittelt)"
+      fi
+    fi
+  fi
+
   exit $fail
 }
 
@@ -227,6 +348,35 @@ mode_bootstrap_globals() {
   printf '%s\n' "== Bootstrap globale ~/.claude/* Dateien =="
   mkdir -p "$CLAUDE_GLOBAL_DIR/agents"
 
+  # Architekt-Modell-Policy: Bedarf ermitteln und Policy aufloesen
+  local need=0
+  if [[ -n "${TATARA_ARCHITECT_MODEL:-}" ]]; then
+    need=1
+  else
+    local a
+    for a in "${SUBAGENTS[@]}"; do
+      local datei="$CLAUDE_GLOBAL_DIR/agents/$a.md"
+      local fn="${a//-/_}"
+      if [[ ! -e "$datei" ]]; then
+        # Template vollstaendig lesen (SIGPIPE-safe: >/dev/null statt head/grep-Abbruch)
+        if "tpl_agent_${fn}" | grep '^model: fable$' >/dev/null 2>&1; then
+          need=1
+          break
+        fi
+      fi
+    done
+  fi
+
+  local effective_model="fable"
+  if [[ $need -eq 1 ]]; then
+    local policy
+    policy="$(resolve_architect_model)" \
+      || err "Bootstrap abgebrochen — TATARA_ARCHITECT_MODEL='${TATARA_ARCHITECT_MODEL:-}' ist ungueltig — erlaubt: fable, opus"
+    local pol_source pol_reason
+    read -r effective_model pol_source pol_reason <<<"$policy"
+    info "Architekt-Modell: $effective_model (Quelle: $pol_source${pol_reason:+ — $pol_reason})"
+  fi
+
   if write_if_missing "$CLAUDE_GLOBAL_DIR/CLAUDE.md"; then
     tpl_global_claude_md > "$CLAUDE_GLOBAL_DIR/CLAUDE.md"
     ok "geschrieben: ~/.claude/CLAUDE.md"
@@ -236,8 +386,14 @@ mode_bootstrap_globals() {
     ok "geschrieben: ~/.claude/software-development-workflow.md"
   fi
   for a in "${SUBAGENTS[@]}"; do
-    if write_if_missing "$CLAUDE_GLOBAL_DIR/agents/$a.md"; then
-      "tpl_agent_${a//-/_}" > "$CLAUDE_GLOBAL_DIR/agents/$a.md"
+    local datei="$CLAUDE_GLOBAL_DIR/agents/$a.md"
+    local fn="${a//-/_}"
+    if write_if_missing "$datei"; then
+      if [[ "$effective_model" == "opus" ]]; then
+        "tpl_agent_${fn}" | substitute_architect_model > "$datei"
+      else
+        "tpl_agent_${fn}" > "$datei"
+      fi
       ok "geschrieben: ~/.claude/agents/$a.md"
     fi
   done
@@ -1565,4 +1721,4 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

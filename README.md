@@ -51,7 +51,7 @@ tatara --snapshot-globals     write the current ~/.claude/* files back into the 
 tatara -h | --help            help
 ```
 
-Override the project root with `PROJECTS_ROOT=/path tatara <name>`.
+Override the project root with `PROJECTS_ROOT=/path tatara <name>`. To pin the architect model, set `TATARA_ARCHITECT_MODEL=fable` or `TATARA_ARCHITECT_MODEL=opus`; the default is auto-detection.
 
 ### Requirements
 
@@ -110,7 +110,7 @@ tatara --snapshot-globals      aktuelle ~/.claude/*-Dateien zurück ins Skript s
 tatara -h | --help             Hilfe
 ```
 
-Projekt-Wurzel überschreiben mit `PROJECTS_ROOT=/pfad tatara <name>`.
+Projekt-Wurzel überschreiben mit `PROJECTS_ROOT=/pfad tatara <name>`. Das Architekt-Modell kann mit `TATARA_ARCHITECT_MODEL=fable` oder `TATARA_ARCHITECT_MODEL=opus` fixiert werden; Standard ist Auto-Erkennung.
 
 ### Voraussetzungen
 

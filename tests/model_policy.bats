@@ -35,7 +35,16 @@ _path_no_claude() {
     mkdir -p "$nodir"
     cp "$STUBS_DIR/git" "$nodir/git"
     cp "$STUBS_DIR/bd"  "$nodir/bd"
-    printf '%s' "${nodir}:${PATH}"
+    # System-PATH beibehalten (coreutils: grep/awk/jq), aber jedes Verzeichnis
+    # mit echter claude-Binary herausfiltern — sonst findet command -v claude
+    # die System-Installation und der no-claude-Pfad ist nicht testbar.
+    local clean="" dir
+    local IFS=':'
+    for dir in $PATH; do
+        [ -n "$dir" ] && [ -x "$dir/claude" ] && continue
+        clean="${clean:+$clean:}$dir"
+    done
+    printf '%s' "${nodir}:${clean}"
 }
 
 # ==============================================================================
@@ -134,7 +143,7 @@ _path_no_claude() {
         || { echo "AK-2: Exit-Code $status erwartet 0"; false; }
     # Kein -p-Call: Log darf kein '-p' enthalten
     if [[ -f "$CLAUDE_STUB_LOG" ]]; then
-        if grep -qF '"-p"' "$CLAUDE_STUB_LOG" 2>/dev/null; then
+        if grep -Eq '(^|[[:space:]"])-p([[:space:]"]|$)' "$CLAUDE_STUB_LOG" 2>/dev/null; then
             echo "AK-2: Stub-Log enthaelt -p-Call — kein Probe erlaubt bei not-logged-in:"
             cat "$CLAUDE_STUB_LOG"
             false
@@ -615,7 +624,7 @@ _setup_full_globals() {
 
     # Kein -p-Call: --check darf nie proben
     if [[ -f "$CLAUDE_STUB_LOG" ]]; then
-        if grep -qF '"-p"' "$CLAUDE_STUB_LOG" 2>/dev/null; then
+        if grep -Eq '(^|[[:space:]"])-p([[:space:]"]|$)' "$CLAUDE_STUB_LOG" 2>/dev/null; then
             echo "AK-11: Stub-Log enthaelt -p-Call — --check darf nie proben:"
             cat "$CLAUDE_STUB_LOG"
             false
@@ -672,7 +681,7 @@ _setup_full_globals() {
 
     # Kein -p-Call
     if [[ -f "$CLAUDE_STUB_LOG" ]] && [[ -s "$CLAUDE_STUB_LOG" ]]; then
-        if grep -qF '"-p"' "$CLAUDE_STUB_LOG" 2>/dev/null; then
+        if grep -Eq '(^|[[:space:]"])-p([[:space:]"]|$)' "$CLAUDE_STUB_LOG" 2>/dev/null; then
             echo "AK-13: Stub-Log enthaelt -p-Call — kein Probe ohne claude:"
             cat "$CLAUDE_STUB_LOG"
             false
