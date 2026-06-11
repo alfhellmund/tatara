@@ -400,9 +400,12 @@ _path_no_git() {
     # 'git wird benoetigt' (oder Variante ohne Umlaute: 'git wird benoetigt')
     [[ "$output" == *"git wird benoetigt"* ]] || [[ "$output" == *"git wird ben"* ]] \
         || { echo "P2-AK-9: 'git wird benoetigt' nicht in Output. Output: $output"; false; }
-    # Kein 'brew install' (weil confirm Non-TTY => Default-Nein, kein Installations-Versuch)
-    [[ "$output" != *"brew install"* ]] \
-        || { echo "P2-AK-9: 'brew install' in Output obwohl Non-TTY confirm Default-Nein sein soll. Output: $output"; false; }
+    # Keine echte Installation: auf den log-Marker '-> brew install' pruefen
+    # (Pipe-Praefix aus log()), NICHT den nackten Substring 'brew install' —
+    # der steckt auch in Prompt-Texten (z.B. bd-Prompt) und waere ein
+    # falsch-rot-Proxy. '-> brew install' erscheint nur bei echtem pkg_install.
+    [[ "$output" != *"-> brew install"* ]] \
+        || { echo "P2-AK-9: echte Installation (-> brew install) gestartet, obwohl Non-TTY confirm Default-Nein sein soll. Output: $output"; false; }
 }
 
 # ==============================================================================
@@ -761,4 +764,24 @@ _path_no_git() {
         || { echo "P2-AK-16: README.md fehlt in ${proj}"; false; }
     grep -q 'quote' "${proj}/README.md" \
         || { echo "P2-AK-16: 'quote' nicht in README.md — Beschreibung nicht gespeichert. Inhalt:"; cat "${proj}/README.md"; false; }
+}
+
+# P2-AK-17: set-e-Naht — mode_wizard MUSS bei EOF (prompt_project_name -> err)
+# abbrechen, BEVOR mode_tatara erreicht wird. Faengt die Maskierung, die ein
+# kombiniertes 'local name="$(...)"' verursachen wuerde (Subshell-Exit verschluckt).
+@test "P2-AK-17: mode_wizard bricht bei EOF vor mode_tatara ab (set-e-Naht)" {
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PATH='${STUB_PATH}'
+        main() { :; }
+        source '${TATARA}' >/dev/null 2>&1 || true
+        # mode_tatara durch Marker ersetzen — darf bei EOF NICHT erreicht werden
+        mode_tatara() { printf 'MODE_TATARA_ERREICHT name=[%s]\n' \"\$1\"; }
+        set -euo pipefail   # set -e aktiv, um die Maskierung real zu testen
+        mode_wizard </dev/null
+    "
+    [ "$status" -ne 0 ] \
+        || { echo "P2-AK-17: mode_wizard sollte bei EOF abbrechen. status=$status, output=$output"; false; }
+    [[ "$output" != *"MODE_TATARA_ERREICHT"* ]] \
+        || { echo "P2-AK-17: mode_tatara trotz EOF erreicht — set-e-Maskierung! Output: $output"; false; }
 }
