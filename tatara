@@ -1302,7 +1302,7 @@ Icon
 .Spotlight-V100
 .Trashes
 
-# IDEs / Editoren
+# IDEs / editors
 .idea/
 .vscode/
 *.swp
@@ -1320,8 +1320,8 @@ Icon
 *.key
 *.pem
 
-# Beads-Schutz (zusaetzlich zu .git/info/exclude im Stealth-Modus
-# nicht noetig; absichtlich leer fuer 'strikt lokal' Direktive)
+# Beads protection (in addition to .git/info/exclude in stealth mode
+# not needed; intentionally empty for 'strictly local' directive)
 GITIGNORE_END
 }
 

@@ -528,8 +528,8 @@ _setup_full_globals() {
             main() { :; }
             source '${TATARA}' >/dev/null 2>&1 || true
             set +euo pipefail
-            de_val=\$(msg_fmt '${key}' de 2>/dev/null)
-            en_val=\$(msg_fmt '${key}' en 2>/dev/null)
+            de_val=\$(TATARA_LANG=de msg_fmt '${key}' 2>/dev/null)
+            en_val=\$(TATARA_LANG=en msg_fmt '${key}' 2>/dev/null)
             printf 'DE:[%s]\n' \"\$de_val\"
             printf 'EN:[%s]\n' \"\$en_val\"
         "
@@ -566,8 +566,8 @@ _setup_full_globals() {
             main() { :; }
             source '${TATARA}' >/dev/null 2>&1 || true
             set +euo pipefail
-            de_val=\$(msg_fmt '${key}' de 2>/dev/null)
-            en_val=\$(msg_fmt '${key}' en 2>/dev/null)
+            de_val=\$(TATARA_LANG=de msg_fmt '${key}' 2>/dev/null)
+            en_val=\$(TATARA_LANG=en msg_fmt '${key}' 2>/dev/null)
             # %% entfernen, dann %s/%d/% zaehlen
             de_dirs=\$(printf '%s' \"\$de_val\" | sed 's/%%//g' | grep -o '%[sd%]' | sort | tr -d '\n')
             en_dirs=\$(printf '%s' \"\$en_val\" | sed 's/%%//g' | grep -o '%[sd%]' | sort | tr -d '\n')
@@ -717,8 +717,8 @@ _setup_full_globals() {
             main() { :; }
             source '${TATARA}' >/dev/null 2>&1 || true
             set +euo pipefail
-            de_val=\$(msg_fmt '${key}' de 2>/dev/null)
-            en_val=\$(msg_fmt '${key}' en 2>/dev/null)
+            de_val=\$(TATARA_LANG=de msg_fmt '${key}' 2>/dev/null)
+            en_val=\$(TATARA_LANG=en msg_fmt '${key}' 2>/dev/null)
             printf 'DE:[%s]\n' \"\$de_val\"
             printf 'EN:[%s]\n' \"\$en_val\"
         "
