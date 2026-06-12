@@ -25,7 +25,7 @@ CLAUDE_INSTALL_URL="https://claude.ai/install.sh"
 log()  { printf '%s\n' "  -> $1"; }
 ok()   { printf '%s\n' "  [ok] $1"; }
 info() { printf '%s\n' "  [info] $1"; }
-warn() { printf '%s\n' "  [warn] $1" >&2; }
+warn() { printf '%s\n' "  $(msg prefix_warn) $1" >&2; }
 err()  { printf '%s\n' "  $(msg prefix_error) $1" >&2; exit 1; }
 
 # === i18n: Spracherkennung + Message-Katalog (de/en, single-file, offline) ===
@@ -57,9 +57,18 @@ msg_fmt() {
     prefix_error)
       de='[fehler]'
       en='[error]' ;;
+    prefix_warn)
+      de='[warnung]'
+      en='[warning]' ;;
     warn_invalid_lang)
       de="TATARA_LANG='%s' ist ungueltig — erlaubt: de, en"
       en="TATARA_LANG='%s' is invalid — allowed: de, en" ;;
+    warn_invalid_interactive)
+      de="TATARA_INTERACTIVE='%s' ist ungueltig — erlaubt: 0, 1"
+      en="TATARA_INTERACTIVE='%s' is invalid — allowed: 0, 1" ;;
+    warn_extra_args)
+      de='Ueberzaehlige Argumente werden ignoriert. Tipp: Beschreibung mit mehreren Woertern in Anfuehrungszeichen einschliessen.'
+      en='Extra arguments are ignored. Tip: enclose a multi-word description in quotes.' ;;
     tatara_project_ready)
       de="Projekt '%s' bereit: %s"
       en="Project '%s' ready: %s" ;;
@@ -142,6 +151,9 @@ msg_fmt() {
     err_git_required_alt)
       de='Abgebrochen — git wird benoetigt. (Alternativ: xcode-select --install)'
       en='Aborted — git is required. (Alternative: xcode-select --install)' ;;
+    err_git_no_identity)
+      de='Keine git-Identity konfiguriert. Bitte setzen: git config --global user.name "Dein Name" && git config --global user.email "deine@email.de"'
+      en='No git identity configured. Please set: git config --global user.name "Your Name" && git config --global user.email "you@example.com"' ;;
     # --- write_if_missing / ensure_globals ---
     ok_written)
       de='geschrieben: %s'
@@ -184,6 +196,9 @@ msg_fmt() {
     ok_snapshot_backup)
       de='Backup: %s'
       en='Backup: %s' ;;
+    err_snapshot_delimiter_collision)
+      de='Snapshot abgebrochen — Delimiter-Kollision in %s (Zeile exakt: %s)'
+      en='Snapshot aborted — delimiter collision in %s (exact line: %s)' ;;
     err_snapshot_validation_failed)
       de='Validierung fehlgeschlagen — Marker im neuen Skript nicht gefunden. Original unveraendert.'
       en='Validation failed — markers not found in new script. Original unchanged.' ;;
@@ -270,6 +285,9 @@ msg_fmt() {
     kickoff_manual_cd)
       de='    cd %s'
       en='    cd %s' ;;
+    kickoff_manual_slash)
+      de='    /kickoff      (falls nicht angeboten: /reload-skills, dann erneut)'
+      en='    /kickoff      (if not offered: /reload-skills, then retry)' ;;
     # --- kickoff_handoff ---
     info_claudecode_session)
       de='Claude-Code-Session erkannt — keine verschachtelte Kickoff-Session.'
@@ -401,7 +419,7 @@ NUTZUNG
   tatara                         Ohne Argumente: startet bei interaktivem Terminal
                                       einen Assistenten (Projektname, Beschreibung),
                                       sonst diese Hilfe
-  tatara <NAME> [BESCHREIBUNG]   Neues Projekt unter ~/Development/<NAME> anlegen
+  tatara <NAME> [BESCHREIBUNG]   Neues Projekt unter $PROJECTS_ROOT/<NAME> anlegen
   tatara --check                 Globale Voraussetzungen + optionale KI-CLIs pruefen
   tatara --bootstrap-globals     Fehlende globale ~/.claude/* Dateien anlegen
   tatara --snapshot-globals      Aktuelle ~/.claude/* Dateien als Templates ins
@@ -459,7 +477,7 @@ USAGE
   tatara                         No arguments: on an interactive terminal starts
                                       an assistant (project name, description),
                                       otherwise shows this help
-  tatara <NAME> [DESCRIPTION]    Create a new project under ~/Development/<NAME>
+  tatara <NAME> [DESCRIPTION]    Create a new project under $PROJECTS_ROOT/<NAME>
   tatara --check                 Check global prerequisites + optional AI CLIs
   tatara --bootstrap-globals     Create missing global ~/.claude/* files
   tatara --snapshot-globals      Write the current ~/.claude/* files back into the
@@ -589,7 +607,7 @@ pkg_install() {
 
 # git: ueberall via System-Paketmanager (bzw. brew).
 ensure_git() {
-  command -v git >/dev/null 2>&1 && return 0
+  check_git && return 0
   if [[ "$OS" == Darwin ]]; then
     confirm "$(msg confirm_git_brew)" \
       || err "$(msg err_git_required_alt)"
@@ -599,14 +617,14 @@ ensure_git() {
   fi
   pkg_install git git git git git
   hash -r 2>/dev/null || true
-  command -v git >/dev/null 2>&1 || err "$(msg err_git_not_found)"
+  check_git || err "$(msg err_git_not_found)"
   ok "$(msg ok_git_installed_plain)"
 }
 
 # bd: macOS via brew; Linux via brew (falls vorhanden), sonst offizielles
 # Beads-Install-Skript (curl | bash). bd ist nicht in apt/dnf/pacman.
 ensure_bd() {
-  command -v bd >/dev/null 2>&1 && return 0
+  check_bd && return 0
   if [[ "$OS" == Darwin ]] || command -v brew >/dev/null 2>&1; then
     command -v brew >/dev/null 2>&1 \
       || err "$(msg err_pkg_no_brew "bd")"
@@ -622,7 +640,7 @@ ensure_bd() {
     curl -fsSL "$BEADS_INSTALL_URL" | bash
   fi
   hash -r 2>/dev/null || true
-  command -v bd >/dev/null 2>&1 \
+  check_bd \
     || err "$(msg err_bd_not_found)"
   ok "$(msg ok_bd_installed_plain)"
 }
@@ -683,14 +701,20 @@ substitute_architect_model() {
 # exit:   0 nur bei 'available', sonst 1
 # Hinweis: Security: Auth-Daten (claude auth status) werden NIE ausgegeben.
 fable_available() {
-  if ! command -v claude >/dev/null 2>&1; then
+  if ! check_claude; then
     echo "no-claude"
     return 1
   fi
 
-  # Hinweis: dieser -p-Probe-Call laeuft auch unter CLAUDECODE (verschachtelt) — Bestandsverhalten, Adressierung fruehestens Phase 4.
   if ! claude_logged_in; then
     echo "not-logged-in"
+    return 1
+  fi
+
+  # Unter CLAUDECODE (direkte Ausfuehrung) laeuft tatara bereits in einer Claude-Session —
+  # verschachtelter -p-Call ist unerwuenscht. Konservativ: opus verwenden.
+  if [[ -n "${CLAUDECODE:-}" && -n "${_TATARA_DIRECT_EXEC:-}" ]]; then
+    echo "nested-session"
     return 1
   fi
 
@@ -930,9 +954,32 @@ mode_snapshot_globals() {
   done
   (( missing_count )) && err "$(msg err_snapshot_aborted_missing)"
 
+  # Kollisions-Guard: Quelldateien duerfen keine Heredoc-Delimiter oder Marker als exakte Zeile enthalten.
+  local _collision_delimiters=('AGENT_END' 'GLOBAL_CLAUDE_END' 'GLOBAL_WORKFLOW_END'
+    '# === BEGIN AUTO-SNAPSHOT TEMPLATES ===' '# === END AUTO-SNAPSHOT TEMPLATES ==='
+    '# === BEGIN MESSAGE CATALOG ===' '# === END MESSAGE CATALOG ===')
+  local _src_files=()
+  _src_files+=("$CLAUDE_GLOBAL_DIR/CLAUDE.md")
+  _src_files+=("$CLAUDE_GLOBAL_DIR/software-development-workflow.md")
+  for a in "${SUBAGENTS[@]}"; do
+    _src_files+=("$CLAUDE_GLOBAL_DIR/agents/$a.md")
+  done
+  local _delim _file
+  for _file in "${_src_files[@]}"; do
+    for _delim in "${_collision_delimiters[@]}"; do
+      if grep -qx "$_delim" "$_file" 2>/dev/null; then
+        err "$(msg err_snapshot_delimiter_collision "$_file" "$_delim")"
+      fi
+    done
+  done
+
   # Eigenen Skriptpfad robust ermitteln (folgt Symlink -> Repo-Datei)
   local script
-  script="$(realpath "${BASH_SOURCE[0]}")"
+  if command -v realpath >/dev/null 2>&1; then
+    script="$(realpath "${BASH_SOURCE[0]}")"
+  else
+    script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  fi
   [[ -z "$script" || ! -f "$script" ]] \
     && err "$(msg err_snapshot_no_script_path)"
 
@@ -1058,7 +1105,7 @@ kickoff_instructions() {
   printf '%s\n' "$(msg kickoff_manual_header)"
   printf '%s\n' "$(msg kickoff_manual_cd "$target")"
   printf '%s\n' "    claude"
-  printf '%s\n' "    /kickoff      (falls nicht angeboten: /reload-skills, dann erneut)"
+  printf '%s\n' "$(msg kickoff_manual_slash)"
 }
 
 kickoff_handoff() {
@@ -1093,6 +1140,11 @@ mode_tatara() {
   local name="$1"
   local desc="${2:-}"
 
+  # Ueberzaehlige Argumente (ab $3) werden ignoriert — nur warnen, nicht abbrechen.
+  if [[ $# -gt 2 ]]; then
+    warn "$(msg warn_extra_args)"
+  fi
+
   [[ -z "$name" ]] && err "$(msg err_name_required)"
   local reason
   if ! reason="$(validate_project_name "$name")"; then err "$reason"; fi
@@ -1109,6 +1161,11 @@ mode_tatara() {
   if [[ ${#miss[@]} -gt 0 ]]; then
     info "$(msg info_globals_incomplete)"
     ensure_globals
+  fi
+
+  # git-Identity-Preflight: git commit wuerde spaeter scheitern ohne user.name/user.email.
+  if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
+    err "$(msg err_git_no_identity)"
   fi
 
   printf '%s\n' "$(msg header_new_project "$name")"
@@ -1320,8 +1377,7 @@ Icon
 *.key
 *.pem
 
-# Beads protection (in addition to .git/info/exclude in stealth mode
-# not needed; intentionally empty for 'strictly local' directive)
+# Beads stealth protection lives in .git/info/exclude — nothing needed here
 GITIGNORE_END
 }
 
@@ -1351,8 +1407,8 @@ tpl_post_commit_verify_sh() {
 #!/bin/bash
 # Done-Gatekeeping: after every `git commit` via the Bash tool,
 # show `git show HEAD --stat` so the commit message can be checked
-# against the actual diff. Verhindert False-Positive-Meldungen wie
-# "wired up in start_server", wenn lib.rs gar nicht im Commit ist.
+# against the actual diff. Prevents false-positive reports like
+# "wired up in start_server" when lib.rs is not part of the commit.
 
 set -e
 
@@ -2418,4 +2474,10 @@ if ! TATARA_LANG="$(resolve_lang)"; then
   warn "$(msg warn_invalid_lang "$_tatara_lang_req")"
 fi
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi
+# TATARA_INTERACTIVE-Validierung (non-fatal: ungueltiger Wert -> warn, kein exit).
+case "${TATARA_INTERACTIVE:-}" in
+  1|0|'') : ;;
+  *) warn "$(msg warn_invalid_interactive "${TATARA_INTERACTIVE}")" ;;
+esac
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then _TATARA_DIRECT_EXEC=1; main "$@"; fi
