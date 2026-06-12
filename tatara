@@ -368,6 +368,9 @@ msg_fmt() {
     info_cli_not_found)
       de='%s: nicht gefunden'
       en='%s: not found' ;;
+    header_check)
+      de='== Pruefe Voraussetzungen =='
+      en='== Checking prerequisites ==' ;;
     # === END MESSAGE CATALOG ===
   esac
   if [[ "${TATARA_LANG:-en}" == de ]]; then printf '%s' "$de"; else printf '%s' "$en"; fi
@@ -755,7 +758,7 @@ resolve_architect_model() {
 }
 
 mode_check() {
-  printf '%s\n' "== Pruefe Voraussetzungen =="
+  printf '%s\n' "$(msg header_check)"
   local fail=0
   if check_git; then
     ok "$(msg ok_git_installed "$(git --version 2>/dev/null)")"

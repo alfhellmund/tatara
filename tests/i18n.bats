@@ -685,3 +685,415 @@ _setup_full_globals() {
     [ "$msg_fmt_line" -lt "$snapshot_line" ] \
         || { echo "I18N-AK-21: msg_fmt() (Zeile $msg_fmt_line) ist NICHT vor BEGIN AUTO-SNAPSHOT (Zeile $snapshot_line)."; false; }
 }
+
+# ==============================================================================
+# I18N-AK-PARITY-MIN — Mindestanzahl-Schutz: CATALOG-Keys >= 90; jeder Key de+en nicht-leer
+# ==============================================================================
+
+@test "I18N-AK-PARITY-MIN: CATALOG-Keys >= 90 (Schutz gegen versehentliches Leeren); jeder Key de+en nicht-leer" {
+    # Extraktion: nur Keys zwischen den Marken, Format: '^[[:space:]]+[a-z0-9_]+\)$'
+    local catalog_keys
+    catalog_keys="$(
+        awk '/BEGIN MESSAGE CATALOG/,/END MESSAGE CATALOG/' "${TATARA}" \
+        | grep -E '^[[:space:]]+[a-z0-9_]+\)$' \
+        | sed 's/[[:space:]]//g; s/)$//'
+    )"
+    local key_count
+    key_count="$(printf '%s\n' "$catalog_keys" | grep -c '.' || true)"
+
+    [ "$key_count" -ge 90 ] \
+        || { echo "I18N-AK-PARITY-MIN: CATALOG enthaelt nur ${key_count} Keys — erwartet >= 90. Entweder Marker fehlt oder Keys wurden versehentlich geloescht."; false; }
+
+    # Fuer jeden Key: de und en nicht-leer
+    local key
+    while IFS= read -r key; do
+        [ -n "$key" ] || continue
+        run bash -c "
+            set +euo pipefail
+            export HOME='${BATS_TEST_TMPDIR}/home'
+            export PATH='${STUB_PATH}'
+            export LC_ALL=C
+            unset LC_MESSAGES LANG TATARA_LANG
+            main() { :; }
+            source '${TATARA}' >/dev/null 2>&1 || true
+            set +euo pipefail
+            de_val=\$(msg_fmt '${key}' de 2>/dev/null)
+            en_val=\$(msg_fmt '${key}' en 2>/dev/null)
+            printf 'DE:[%s]\n' \"\$de_val\"
+            printf 'EN:[%s]\n' \"\$en_val\"
+        "
+        [[ "$output" != *"DE:[]"* ]] \
+            || { echo "I18N-AK-PARITY-MIN: Key '${key}' -> msg_fmt de ist leer (Paritatsverletzung). Output: $output"; false; }
+        [[ "$output" != *"EN:[]"* ]] \
+            || { echo "I18N-AK-PARITY-MIN: Key '${key}' -> msg_fmt en ist leer (Paritatsverletzung). Output: $output"; false; }
+    done <<< "$catalog_keys"
+}
+
+# ==============================================================================
+# I18N-AK-EN-CHECK — TATARA_LANG=en + --check: keine deutschen Marker, positive Anker
+# ==============================================================================
+
+@test "I18N-AK-EN-CHECK: TATARA_LANG=en + tatara --check -> keine deutschen Strings; enthaelt 'Language: en' oder 'installed'/'Architect'" {
+    _setup_full_globals
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
+        export PATH='${STUB_PATH}'
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CLAUDE_STUB_LOGGED_IN=1
+        export TATARA_LANG=en
+        export LC_ALL=en_US.UTF-8
+        export LANG=en_US.UTF-8
+        export LC_MESSAGES=en_US.UTF-8
+        unset CLAUDECODE
+        bash '${TATARA}' --check 2>&1
+    "
+    # Positiver Anker: mindestens einer dieser englischen Strings muss erscheinen
+    local found_en_anchor=0
+    [[ "$output" == *"Language: en"* ]] && found_en_anchor=1
+    [[ "$output" == *"installed"*   ]] && found_en_anchor=1
+    [[ "$output" == *"Architect"*   ]] && found_en_anchor=1
+    [ "$found_en_anchor" -eq 1 ] \
+        || { echo "I18N-AK-EN-CHECK: Kein englischer Anker ('Language: en'/'installed'/'Architect') gefunden. Output: $output"; false; }
+
+    # Negative Pruefungen: keine deutschen Strings
+    [[ "$output" != *"geschrieben:"*  ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'geschrieben:' im en-Output. Output: $output"; false; }
+    [[ "$output" != *"behalten:"*     ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'behalten:' im en-Output. Output: $output"; false; }
+    [[ "$output" != *"gefunden"*      ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'gefunden' im en-Output. Output: $output"; false; }
+    [[ "$output" != *"installiert"*   ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'installiert' im en-Output. Output: $output"; false; }
+    [[ "$output" != *"vorhanden"*     ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'vorhanden' im en-Output. Output: $output"; false; }
+    [[ "$output" != *"benoetigt"*     ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'benoetigt' im en-Output. Output: $output"; false; }
+    [[ "$output" != *"fehlt"*         ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'fehlt' im en-Output. Output: $output"; false; }
+    [[ "$output" != *"eingeloggt"*    ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'eingeloggt' im en-Output. Output: $output"; false; }
+    [[ "$output" != *"Sprache:"*      ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'Sprache:' im en-Output. Output: $output"; false; }
+    [[ "$output" != *"Voraussetz"*    ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'Voraussetz' im en-Output. Output: $output"; false; }
+    [[ "$output" != *"Architekt-Modell"* ]] \
+        || { echo "I18N-AK-EN-CHECK: deutscher String 'Architekt-Modell' im en-Output. Output: $output"; false; }
+}
+
+# ==============================================================================
+# I18N-AK-EN-HELP — TATARA_LANG=en tatara -h: englische Sektionen, keine deutschen
+# ==============================================================================
+
+@test "I18N-AK-EN-HELP: TATARA_LANG=en tatara -h -> enthaelt USAGE/ENVIRONMENT/TATARA_LANG; kein NUTZUNG/UMGEBUNGSVARIABLEN/fuer/benoetigt" {
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PATH='${STUB_PATH}'
+        export TATARA_LANG=en
+        export LC_ALL=en_US.UTF-8
+        export LANG=en_US.UTF-8
+        export LC_MESSAGES=en_US.UTF-8
+        bash '${TATARA}' -h 2>&1
+    "
+    [ "$status" -eq 0 ] \
+        || { echo "I18N-AK-EN-HELP: tatara -h Exit $status erwartet 0. Output: $output"; false; }
+
+    # Positive Anker
+    [[ "$output" == *"USAGE"*       ]] \
+        || { echo "I18N-AK-EN-HELP: 'USAGE' fehlt in en-Hilfe. Output: $output"; false; }
+    [[ "$output" == *"ENVIRONMENT"* ]] \
+        || { echo "I18N-AK-EN-HELP: 'ENVIRONMENT' fehlt in en-Hilfe. Output: $output"; false; }
+    [[ "$output" == *"TATARA_LANG"* ]] \
+        || { echo "I18N-AK-EN-HELP: 'TATARA_LANG' fehlt in en-Hilfe. Output: $output"; false; }
+
+    # Negative Pruefungen
+    [[ "$output" != *"NUTZUNG"*           ]] \
+        || { echo "I18N-AK-EN-HELP: 'NUTZUNG' erscheint in TATARA_LANG=en -h. Output: $output"; false; }
+    [[ "$output" != *"UMGEBUNGSVARIABLEN"* ]] \
+        || { echo "I18N-AK-EN-HELP: 'UMGEBUNGSVARIABLEN' erscheint in TATARA_LANG=en -h. Output: $output"; false; }
+    [[ "$output" != *"fuer"*              ]] \
+        || { echo "I18N-AK-EN-HELP: 'fuer' erscheint in TATARA_LANG=en -h. Output: $output"; false; }
+    [[ "$output" != *"benoetigt"*         ]] \
+        || { echo "I18N-AK-EN-HELP: 'benoetigt' erscheint in TATARA_LANG=en -h. Output: $output"; false; }
+}
+
+# ==============================================================================
+# I18N-AK-EN-BOOTSTRAP — TATARA_LANG=en + --bootstrap-globals: englische Ausgabe, kein de
+# ==============================================================================
+
+@test "I18N-AK-EN-BOOTSTRAP: TATARA_LANG=en + --bootstrap-globals -> englische Marker; keine deutschen 'geschrieben:'/'behalten:'; Exit wie de" {
+    # Zwei isolierte HOMEs: de und en, dann Exit-Codes vergleichen
+    local home_en="${BATS_TEST_TMPDIR}/home_en_boot"
+    mkdir -p "$home_en"
+
+    run bash -c "
+        export HOME='${home_en}'
+        export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
+        export PATH='${STUB_PATH}'
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CLAUDE_STUB_LOGGED_IN=0
+        export TATARA_LANG=en
+        export TATARA_ARCHITECT_MODEL=opus
+        export LC_ALL=en_US.UTF-8
+        export LANG=en_US.UTF-8
+        export LC_MESSAGES=en_US.UTF-8
+        unset CLAUDECODE
+        bash '${TATARA}' --bootstrap-globals 2>&1
+    "
+    local status_en="$status"
+    local output_en="$output"
+
+    # Positiver Anker: englischer Output-Marker
+    [[ "$output_en" == *"written:"* ]] \
+        || { echo "I18N-AK-EN-BOOTSTRAP: englischer Marker 'written:' fehlt im en-Output. Output: $output_en"; false; }
+
+    # Negative Pruefungen
+    [[ "$output_en" != *"geschrieben:"* ]] \
+        || { echo "I18N-AK-EN-BOOTSTRAP: deutscher String 'geschrieben:' im en-Output. Output: $output_en"; false; }
+    [[ "$output_en" != *"behalten:"*    ]] \
+        || { echo "I18N-AK-EN-BOOTSTRAP: deutscher String 'behalten:' im en-Output. Output: $output_en"; false; }
+
+    # Exit-Code-Paritat mit TATARA_LANG=de auf leerem HOME
+    local home_de="${BATS_TEST_TMPDIR}/home_de_boot"
+    mkdir -p "$home_de"
+    run bash -c "
+        export HOME='${home_de}'
+        export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
+        export PATH='${STUB_PATH}'
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CLAUDE_STUB_LOGGED_IN=0
+        export TATARA_LANG=de
+        export TATARA_ARCHITECT_MODEL=opus
+        export LC_ALL=de_DE.UTF-8
+        export LANG=de_DE.UTF-8
+        export LC_MESSAGES=de_DE.UTF-8
+        unset CLAUDECODE
+        bash '${TATARA}' --bootstrap-globals 2>&1
+    "
+    local status_de="$status"
+
+    [ "$status_en" -eq "$status_de" ] \
+        || { echo "I18N-AK-EN-BOOTSTRAP: Exit-Code-Paritat verletzt — de=$status_de en=$status_en. en-Output: $output_en"; false; }
+}
+
+# ==============================================================================
+# I18N-AK-GLOBALS-IDENTICAL — Templates unter de und en byte-identisch
+# ==============================================================================
+
+@test "I18N-AK-GLOBALS-IDENTICAL: --bootstrap-globals-Dateien unter TATARA_LANG=de und =en byte-identisch (sprachneutrale Templates)" {
+    # Zwei isolierte HOMEs bootstrappen, dann diff -r der .claude-Baeume
+    local home_de="${BATS_TEST_TMPDIR}/home_identical_de"
+    local home_en="${BATS_TEST_TMPDIR}/home_identical_en"
+    mkdir -p "$home_de" "$home_en"
+
+    # de-Bootstrap
+    run bash -c "
+        export HOME='${home_de}'
+        export PATH='${STUB_PATH}'
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CLAUDE_STUB_LOGGED_IN=0
+        export TATARA_LANG=de
+        export TATARA_ARCHITECT_MODEL=opus
+        export LC_ALL=C
+        unset CLAUDECODE
+        bash '${TATARA}' --bootstrap-globals 2>&1
+    "
+    [ "$status" -eq 0 ] \
+        || { echo "I18N-AK-GLOBALS-IDENTICAL: de-Bootstrap fehlgeschlagen (Exit $status). Output: $output"; false; }
+
+    # en-Bootstrap
+    run bash -c "
+        export HOME='${home_en}'
+        export PATH='${STUB_PATH}'
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CLAUDE_STUB_LOGGED_IN=0
+        export TATARA_LANG=en
+        export TATARA_ARCHITECT_MODEL=opus
+        export LC_ALL=C
+        unset CLAUDECODE
+        bash '${TATARA}' --bootstrap-globals 2>&1
+    "
+    [ "$status" -eq 0 ] \
+        || { echo "I18N-AK-GLOBALS-IDENTICAL: en-Bootstrap fehlgeschlagen (Exit $status). Output: $output"; false; }
+
+    # Beide .claude-Baeume muessen identisch sein
+    local diff_output
+    diff_output="$(diff -r "${home_de}/.claude" "${home_en}/.claude" 2>&1)"
+    [ -z "$diff_output" ] \
+        || { echo "I18N-AK-GLOBALS-IDENTICAL: .claude-Baeume de vs en nicht identisch (AK: Templates sind sprachneutral). Diff: $diff_output"; false; }
+}
+
+# ==============================================================================
+# I18N-AK-EXIT-PARITY — Exit-Code-Paritat de vs en fuer zwei Szenarien
+# ==============================================================================
+
+@test "I18N-AK-EXIT-PARITY: Exit-Code de == en bei (a) existierendem Ziel; (b) --check ohne git im PATH" {
+    _setup_full_globals
+
+    # Szenario (a): tatara <name> auf ein Ziel, das bereits existiert -> Exit != 0 in beiden Sprachen
+    local target="${BATS_TEST_TMPDIR}/dev/existing"
+    mkdir -p "$target"
+
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
+        export PATH='${STUB_PATH}'
+        export TATARA_LANG=de
+        export LC_ALL=C
+        unset CLAUDECODE
+        bash '${TATARA}' existing 2>&1
+    "
+    local status_de_a="$status"
+
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
+        export PATH='${STUB_PATH}'
+        export TATARA_LANG=en
+        export LC_ALL=C
+        unset CLAUDECODE
+        bash '${TATARA}' existing 2>&1
+    "
+    local status_en_a="$status"
+
+    [ "$status_de_a" -eq "$status_en_a" ] \
+        || { echo "I18N-AK-EXIT-PARITY (a) existierendes Ziel: de=$status_de_a != en=$status_en_a"; false; }
+    [ "$status_de_a" -ne 0 ] \
+        || { echo "I18N-AK-EXIT-PARITY (a): beide Sprachen liefern Exit 0 bei existierendem Ziel — erwartet != 0"; false; }
+
+    # Szenario (b): --check ohne git im PATH
+    local nodir="${BATS_TEST_TMPDIR}/nogit_parity_$$"
+    mkdir -p "$nodir"
+    cp "${STUBS_DIR}/bd"     "$nodir/bd"
+    cp "${STUBS_DIR}/claude" "$nodir/claude"
+    cp "${STUBS_DIR}/curl"   "$nodir/curl"
+    printf '%s\n' '#!/usr/bin/env bash' 'printf "Darwin\n"' > "$nodir/uname"
+    chmod +x "$nodir/uname" "$nodir/bd" "$nodir/claude" "$nodir/curl"
+    # System-PATH ohne Verzeichnisse mit git-Binary
+    local clean="" dir
+    local IFS_SAVE="$IFS"; IFS=':'
+    for dir in $PATH; do
+        [ -n "$dir" ] && [ -x "$dir/git" ] && continue
+        clean="${clean:+$clean:}$dir"
+    done
+    IFS="$IFS_SAVE"
+    local nogit_path="${nodir}:${clean}"
+
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
+        export PATH='${nogit_path}'
+        export TATARA_LANG=de
+        export LC_ALL=C
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CLAUDE_STUB_LOGGED_IN=0
+        unset CLAUDECODE
+        bash '${TATARA}' --check 2>&1
+    "
+    local status_de_b="$status"
+
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
+        export PATH='${nogit_path}'
+        export TATARA_LANG=en
+        export LC_ALL=C
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CLAUDE_STUB_LOGGED_IN=0
+        unset CLAUDECODE
+        bash '${TATARA}' --check 2>&1
+    "
+    local status_en_b="$status"
+
+    [ "$status_de_b" -eq "$status_en_b" ] \
+        || { echo "I18N-AK-EXIT-PARITY (b) --check ohne git: de=$status_de_b != en=$status_en_b"; false; }
+}
+
+# ==============================================================================
+# I18N-AK-EN-PROJECT — TATARA_LANG=en + Projekt-Anlage: en-Platzhalter, kein de; SKILL.md en
+# ==============================================================================
+
+@test "I18N-AK-EN-PROJECT: TATARA_LANG=en + tatara <name> -> README.md/CLAUDE.md en-Platzhalter, kein de; SKILL.md 'Default conversation language: English'" {
+    _setup_full_globals
+
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
+        export PATH='${STUB_PATH}'
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CLAUDE_STUB_LOGGED_IN=1
+        export TATARA_LANG=en
+        export TATARA_INTERACTIVE=0
+        export LC_ALL=en_US.UTF-8
+        export LANG=en_US.UTF-8
+        export LC_MESSAGES=en_US.UTF-8
+        unset CLAUDECODE
+        bash '${TATARA}' entest 2>&1
+    "
+    [ "$status" -eq 0 ] \
+        || { echo "I18N-AK-EN-PROJECT: tatara entest Exit $status erwartet 0. Output: $output"; false; }
+
+    local proj="${BATS_TEST_TMPDIR}/dev/entest"
+
+    # README.md: englischer Platzhalter
+    grep -q 'Enter setup steps' "${proj}/README.md" \
+        || { echo "I18N-AK-EN-PROJECT: README.md enthaelt keinen englischen Platzhalter 'Enter setup steps'. Inhalt:"; cat "${proj}/README.md"; false; }
+    # README.md: kein deutscher Platzhalter
+    grep -qF 'Setup-Schritte' "${proj}/README.md" \
+        && { echo "I18N-AK-EN-PROJECT: README.md enthaelt deutschen Platzhalter 'Setup-Schritte'. Inhalt:"; cat "${proj}/README.md"; false; } || true
+
+    # CLAUDE.md: englischer Platzhalter
+    grep -q 'One-line project description' "${proj}/CLAUDE.md" \
+        || { echo "I18N-AK-EN-PROJECT: CLAUDE.md enthaelt keinen englischen Platzhalter 'One-line project description'. Inhalt:"; cat "${proj}/CLAUDE.md"; false; }
+    # CLAUDE.md: kein deutscher Platzhalter
+    grep -qF 'Eine Zeile Projektbeschreibung' "${proj}/CLAUDE.md" \
+        && { echo "I18N-AK-EN-PROJECT: CLAUDE.md enthaelt deutschen Platzhalter 'Eine Zeile Projektbeschreibung'. Inhalt:"; cat "${proj}/CLAUDE.md"; false; } || true
+    grep -qF 'eintragen' "${proj}/CLAUDE.md" \
+        && { echo "I18N-AK-EN-PROJECT: CLAUDE.md enthaelt deutschen String 'eintragen'. Inhalt:"; cat "${proj}/CLAUDE.md"; false; } || true
+
+    # SKILL.md: englische Sprachzeile
+    local skill="${proj}/.claude/skills/kickoff/SKILL.md"
+    [ -f "$skill" ] \
+        || { echo "I18N-AK-EN-PROJECT: SKILL.md fehlt unter ${skill}"; false; }
+    grep -q 'Default conversation language: English' "$skill" \
+        || { echo "I18N-AK-EN-PROJECT: SKILL.md enthaelt nicht 'Default conversation language: English'. Inhalt:"; cat "$skill"; false; }
+    grep -q 'Default conversation language: German' "$skill" \
+        && { echo "I18N-AK-EN-PROJECT: SKILL.md enthaelt deutschen String 'Default conversation language: German'. Inhalt:"; cat "$skill"; false; } || true
+}
+
+# ==============================================================================
+# I18N-AK-SNAPSHOT-I18N — Snapshot-Roundtrip: msg_fmt() + CATALOG-Marker erhalten, bash -n sauber
+# ==============================================================================
+
+@test "I18N-AK-SNAPSHOT-I18N: Snapshot-Roundtrip auf Kopie -> Kopie definiert msg_fmt(), enthaelt BEGIN MESSAGE CATALOG, bash -n sauber" {
+    _setup_full_globals
+
+    # Tatara in tmpdir kopieren (wie P4-AK-12)
+    local tatara_copy="${BATS_TEST_TMPDIR}/tatara_i18n_snap"
+    cp "${TATARA}" "$tatara_copy"
+    chmod +x "$tatara_copy"
+
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PATH='${STUB_PATH}'
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export TATARA_LANG=de
+        export TATARA_ARCHITECT_MODEL=opus
+        unset CLAUDECODE
+        bash '$tatara_copy' --snapshot-globals </dev/null 2>&1
+    "
+    [ "$status" -eq 0 ] \
+        || { echo "I18N-AK-SNAPSHOT-I18N: --snapshot-globals fehlgeschlagen (Exit $status). Output: $output"; false; }
+
+    # msg_fmt() muss in der Kopie definiert sein
+    grep -q '^msg_fmt()' "$tatara_copy" \
+        || { echo "I18N-AK-SNAPSHOT-I18N: 'msg_fmt()' nach Snapshot nicht mehr in der Kopie — i18n-Code liegt im falschen Block!"; false; }
+
+    # BEGIN MESSAGE CATALOG-Marker muss erhalten sein
+    grep -q '# === BEGIN MESSAGE CATALOG ===' "$tatara_copy" \
+        || { echo "I18N-AK-SNAPSHOT-I18N: '# === BEGIN MESSAGE CATALOG ===' nach Snapshot nicht mehr in der Kopie. i18n-Katalog wurde ueberschrieben!"; false; }
+
+    # bash -n muss sauber durchlaufen
+    bash -n "$tatara_copy" \
+        || { echo "I18N-AK-SNAPSHOT-I18N: bash -n Syntax-Check der Snapshot-Kopie fehlgeschlagen"; false; }
+}
