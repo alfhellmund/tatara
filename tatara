@@ -142,6 +142,163 @@ msg_fmt() {
     err_git_required_alt)
       de='Abgebrochen — git wird benoetigt. (Alternativ: xcode-select --install)'
       en='Aborted — git is required. (Alternative: xcode-select --install)' ;;
+    # --- write_if_missing / ensure_globals ---
+    ok_written)
+      de='geschrieben: %s'
+      en='written: %s' ;;
+    ok_kept)
+      de='behalten: %s'
+      en='kept: %s' ;;
+    info_arch_model_resolved)
+      de='Architekt-Modell: %s (Quelle: %s)'
+      en='Architect model: %s (source: %s)' ;;
+    err_bootstrap_invalid_model)
+      de="Bootstrap abgebrochen — TATARA_ARCHITECT_MODEL='%s' ist ungueltig — erlaubt: fable, opus"
+      en="Bootstrap aborted — TATARA_ARCHITECT_MODEL='%s' is invalid — allowed: fable, opus" ;;
+    # --- mode_bootstrap_globals ---
+    header_bootstrap_globals)
+      de='== Bootstrap globale ~/.claude/* Dateien =='
+      en='== Bootstrap global ~/.claude/* files ==' ;;
+    ok_globals_ready)
+      de="Globale Voraussetzungen sind bereit. Nutze 'tatara <name>' fuer ein neues Projekt."
+      en="Global prerequisites are ready. Use 'tatara <name>' to start a new project." ;;
+    # --- mode_snapshot_globals ---
+    header_snapshot_globals)
+      de='== Snapshot ~/.claude/* Dateien ins Skript zurueckschreiben =='
+      en='== Snapshot ~/.claude/* files back into the script ==' ;;
+    warn_snapshot_missing_file)
+      de='fehlt: %s'
+      en='missing: %s' ;;
+    err_snapshot_aborted_missing)
+      de='Snapshot abgebrochen — fehlende Quellen oben.'
+      en='Snapshot aborted — missing sources listed above.' ;;
+    err_snapshot_no_script_path)
+      de='Kann eigenen Skriptpfad nicht bestimmen'
+      en='Cannot determine own script path' ;;
+    log_snapshot_source)
+      de='Quelle: ~/.claude/'
+      en='Source: ~/.claude/' ;;
+    log_snapshot_target)
+      de='Ziel:   %s'
+      en='Target: %s' ;;
+    ok_snapshot_backup)
+      de='Backup: %s'
+      en='Backup: %s' ;;
+    err_snapshot_validation_failed)
+      de='Validierung fehlgeschlagen — Marker im neuen Skript nicht gefunden. Original unveraendert.'
+      en='Validation failed — markers not found in new script. Original unchanged.' ;;
+    err_snapshot_syntax_failed)
+      de='Syntax-Check (bash -n) fehlgeschlagen — neues Skript verworfen. Original unveraendert.'
+      en='Syntax check (bash -n) failed — new script discarded. Original unchanged.' ;;
+    ok_snapshot_done)
+      de='Snapshot eingespielt'
+      en='Snapshot applied' ;;
+    info_snapshot_diff)
+      de='Unterschied gegen Backup: diff "%s" "%s"'
+      en='Diff against backup: diff "%s" "%s"' ;;
+    # --- validate_project_name ---
+    err_name_empty)
+      de='Projektname darf nicht leer sein'
+      en='Project name must not be empty' ;;
+    err_name_slash)
+      de='Projektname darf kein / enthalten'
+      en='Project name must not contain /' ;;
+    err_name_space)
+      de='Projektname darf keine Leerzeichen enthalten'
+      en='Project name must not contain spaces' ;;
+    err_name_dot)
+      de='Projektname darf nicht mit . beginnen'
+      en='Project name must not start with .' ;;
+    err_name_chars)
+      de='Projektname darf nur Buchstaben, Ziffern, . - _ enthalten'
+      en='Project name may only contain letters, digits, . - _' ;;
+    # --- prompt_project_name ---
+    prompt_project_name)
+      de='  Projektname: '
+      en='  Project name: ' ;;
+    err_input_aborted)
+      de='Eingabe abgebrochen — Projektname erforderlich.'
+      en='Input aborted — project name required.' ;;
+    # --- mode_wizard ---
+    header_wizard)
+      de='== tatara — Neues Projekt (interaktiv) =='
+      en='== tatara — New project (interactive) ==' ;;
+    prompt_description)
+      de='  Beschreibung (optional, Enter = keine): '
+      en='  Description (optional, Enter = none): ' ;;
+    # --- mode_tatara ---
+    err_name_required)
+      de="Projektname erforderlich. Nutze 'tatara -h' fuer Hilfe."
+      en="Project name required. Use 'tatara -h' for help." ;;
+    err_target_exists)
+      de='%s existiert bereits'
+      en='%s already exists' ;;
+    info_globals_incomplete)
+      de='Globale Voraussetzungen unvollstaendig — bootstrappe fehlende Dateien'
+      en='Global prerequisites incomplete — bootstrapping missing files' ;;
+    header_new_project)
+      de="== Lege Projekt '%s' an =="
+      en="== Creating project '%s' ==" ;;
+    log_dir)
+      de='Verzeichnis: %s'
+      en='Directory: %s' ;;
+    log_git_init)
+      de='git init (default branch main)'
+      en='git init (default branch main)' ;;
+    log_write_files)
+      de='Schreibe README.md, CLAUDE.md, .gitignore'
+      en='Writing README.md, CLAUDE.md, .gitignore' ;;
+    log_write_claude_files)
+      de='Schreibe .claude/settings.json + post-commit-verify.sh'
+      en='Writing .claude/settings.json + post-commit-verify.sh' ;;
+    log_write_skill)
+      de='Schreibe .claude/skills/kickoff/SKILL.md'
+      en='Writing .claude/skills/kickoff/SKILL.md' ;;
+    log_bd_init)
+      de='bd init (stealth, skip-hooks, skip-agents)'
+      en='bd init (stealth, skip-hooks, skip-agents)' ;;
+    log_gitignore_rewrite)
+      de='schreibe .gitignore neu (Beads-Stealth-Luecke schliessen)'
+      en='rewriting .gitignore (closing Beads stealth gap)' ;;
+    log_initial_commit)
+      de='Initial commit'
+      en='Initial commit' ;;
+    # --- kickoff_instructions ---
+    kickoff_manual_header)
+      de='  Kickoff manuell starten:'
+      en='  Start kickoff manually:' ;;
+    kickoff_manual_cd)
+      de='    cd %s'
+      en='    cd %s' ;;
+    # --- kickoff_handoff ---
+    info_claudecode_session)
+      de='Claude-Code-Session erkannt — keine verschachtelte Kickoff-Session.'
+      en='Claude Code session detected — no nested kickoff session.' ;;
+    info_claude_unavailable)
+      de='claude ist nicht verfuegbar — Kickoff-Skill liegt bereit.'
+      en='claude is not available — Kickoff skill is ready.' ;;
+    info_claude_not_logged_in_kickoff)
+      de='claude ist nicht eingeloggt — Kickoff-Skill liegt bereit.'
+      en='claude is not logged in — Kickoff skill is ready.' ;;
+    info_login_first)
+      de='Erst einloggen: claude auth login — danach:'
+      en='Log in first: claude auth login — then:' ;;
+    confirm_kickoff)
+      de='Projekt-Kickoff jetzt starten (claude uebernimmt dieses Terminal)?'
+      en='Start project kickoff now (claude takes over this terminal)?' ;;
+    log_start_kickoff)
+      de='Starte Kickoff-Session: claude /kickoff'
+      en='Starting kickoff session: claude /kickoff' ;;
+    warn_cd_failed)
+      de='Wechsel nach %s fehlgeschlagen.'
+      en='Failed to change to %s.' ;;
+    warn_claude_start_failed)
+      de='claude konnte nicht gestartet werden.'
+      en='claude could not be started.' ;;
+    # --- main ---
+    err_unknown_option)
+      de="Unbekannte Option: %s. Nutze 'tatara -h' fuer Hilfe."
+      en="Unknown option: %s. Use 'tatara -h' for help." ;;
     # --- mode_check ---
     info_arch_model_fable_auto)
       de='Architekt-Modell: fable falls verfuegbar, sonst opus (final beim Bootstrap ermittelt)'
@@ -669,7 +826,7 @@ mode_check() {
 write_if_missing() {
   local path="$1"
   if [[ -e "$path" ]]; then
-    ok "behalten: $path"
+    ok "$(msg ok_kept "$path")"
     return 1
   fi
   mkdir -p "$(dirname "$path")"
@@ -703,19 +860,19 @@ ensure_globals() {
   if [[ $need -eq 1 ]]; then
     local policy
     policy="$(resolve_architect_model)" \
-      || err "Bootstrap abgebrochen — TATARA_ARCHITECT_MODEL='${TATARA_ARCHITECT_MODEL:-}' ist ungueltig — erlaubt: fable, opus"
+      || err "$(msg err_bootstrap_invalid_model "${TATARA_ARCHITECT_MODEL:-}")"
     local pol_source pol_reason
     read -r effective_model pol_source pol_reason <<<"$policy"
-    info "Architekt-Modell: $effective_model (Quelle: $pol_source${pol_reason:+ — $pol_reason})"
+    info "$(msg info_arch_model_resolved "$effective_model" "$pol_source${pol_reason:+ — $pol_reason}")"
   fi
 
   if write_if_missing "$CLAUDE_GLOBAL_DIR/CLAUDE.md"; then
     tpl_global_claude_md > "$CLAUDE_GLOBAL_DIR/CLAUDE.md"
-    ok "geschrieben: ~/.claude/CLAUDE.md"
+    ok "$(msg ok_written "$HOME/.claude/CLAUDE.md")"
   fi
   if write_if_missing "$CLAUDE_GLOBAL_DIR/software-development-workflow.md"; then
     tpl_global_workflow_md > "$CLAUDE_GLOBAL_DIR/software-development-workflow.md"
-    ok "geschrieben: ~/.claude/software-development-workflow.md"
+    ok "$(msg ok_written "$HOME/.claude/software-development-workflow.md")"
   fi
   for a in "${SUBAGENTS[@]}"; do
     local datei="$CLAUDE_GLOBAL_DIR/agents/$a.md"
@@ -726,50 +883,50 @@ ensure_globals() {
       else
         "tpl_agent_${fn}" > "$datei"
       fi
-      ok "geschrieben: ~/.claude/agents/$a.md"
+      ok "$(msg ok_written "$HOME/.claude/agents/$a.md")"
     fi
   done
 }
 
 mode_bootstrap_globals() {
-  printf '%s\n' "== Bootstrap globale ~/.claude/* Dateien =="
+  printf '%s\n' "$(msg header_bootstrap_globals)"
   ensure_claude
   ensure_globals
   printf '%s\n' ""
   ensure_git
   ensure_bd
   printf '%s\n' ""
-  printf '%s\n' "Globale Voraussetzungen sind bereit. Nutze 'tatara <name>' fuer ein neues Projekt."
+  printf '%s\n' "$(msg ok_globals_ready)"
 }
 
 # === Mode: snapshot-globals (Skript regeneriert eigene Embedded Templates) ===
 mode_snapshot_globals() {
-  printf '%s\n' "== Snapshot ~/.claude/* Dateien ins Skript zurueckschreiben =="
+  printf '%s\n' "$(msg header_snapshot_globals)"
 
   # Pre-Flight: Quellen pruefen
   local missing_count=0
   [[ -f "$CLAUDE_GLOBAL_DIR/CLAUDE.md" ]] \
-    || { warn "fehlt: ~/.claude/CLAUDE.md"; missing_count=1; }
+    || { warn "$(msg warn_snapshot_missing_file "$HOME/.claude/CLAUDE.md")"; missing_count=1; }
   [[ -f "$CLAUDE_GLOBAL_DIR/software-development-workflow.md" ]] \
-    || { warn "fehlt: ~/.claude/software-development-workflow.md"; missing_count=1; }
+    || { warn "$(msg warn_snapshot_missing_file "$HOME/.claude/software-development-workflow.md")"; missing_count=1; }
   for a in "${SUBAGENTS[@]}"; do
     [[ -f "$CLAUDE_GLOBAL_DIR/agents/$a.md" ]] \
-      || { warn "fehlt: ~/.claude/agents/$a.md"; missing_count=1; }
+      || { warn "$(msg warn_snapshot_missing_file "$HOME/.claude/agents/$a.md")"; missing_count=1; }
   done
-  (( missing_count )) && err "Snapshot abgebrochen — fehlende Quellen oben."
+  (( missing_count )) && err "$(msg err_snapshot_aborted_missing)"
 
   # Eigenen Skriptpfad robust ermitteln (folgt Symlink -> Repo-Datei)
   local script
   script="$(realpath "${BASH_SOURCE[0]}")"
   [[ -z "$script" || ! -f "$script" ]] \
-    && err "Kann eigenen Skriptpfad nicht bestimmen"
+    && err "$(msg err_snapshot_no_script_path)"
 
-  log "Quelle: ~/.claude/"
-  log "Ziel:   $script"
+  log "$(msg log_snapshot_source)"
+  log "$(msg log_snapshot_target "$script")"
 
   # Backup
   cp -f "$script" "$script.bak"
-  ok "Backup: $script.bak"
+  ok "$(msg ok_snapshot_backup "$script.bak")"
 
   # Neuen Templates-Block in Temp-Datei aufbauen
   local tmpblock tmpscript
@@ -826,11 +983,11 @@ mode_snapshot_globals() {
   if ! grep -q "BEGIN AUTO-SNAPSHOT TEMPLATES" "$tmpscript" \
      || ! grep -q "END AUTO-SNAPSHOT TEMPLATES" "$tmpscript"; then
     rm -f "$tmpblock" "$tmpscript"
-    err "Validierung fehlgeschlagen — Marker im neuen Skript nicht gefunden. Original unveraendert."
+    err "$(msg err_snapshot_validation_failed)"
   fi
   if ! bash -n "$tmpscript" 2>/dev/null; then
     rm -f "$tmpblock" "$tmpscript"
-    err "Syntax-Check (bash -n) fehlgeschlagen — neues Skript verworfen. Original unveraendert."
+    err "$(msg err_snapshot_syntax_failed)"
   fi
 
   # Atomic mv
@@ -838,9 +995,9 @@ mode_snapshot_globals() {
   mv "$tmpscript" "$script"
   rm -f "$tmpblock"
 
-  ok "Snapshot eingespielt"
+  ok "$(msg ok_snapshot_done)"
   printf '%s\n' ""
-  printf '%s\n' "Unterschied gegen Backup: diff \"$script.bak\" \"$script\""
+  printf '%s\n' "$(msg info_snapshot_diff "$script.bak" "$script")"
 }
 
 # Prueft Projektname auf Gueltigkeit.
@@ -848,11 +1005,11 @@ mode_snapshot_globals() {
 validate_project_name() {
   local name="$1"
   local LC_ALL=C   # byte-genauer, locale-unabhaengiger Zeichenklassen-Vergleich (auch Unicode = ungueltig)
-  if   [[ -z "$name" ]];               then echo "Projektname darf nicht leer sein"
-  elif [[ "$name" == *"/"* ]];         then echo "Projektname darf kein / enthalten"
-  elif [[ "$name" == *[[:space:]]* ]]; then echo "Projektname darf keine Leerzeichen enthalten"
-  elif [[ "$name" == .* ]];            then echo "Projektname darf nicht mit . beginnen"
-  elif [[ "$name" == *[!A-Za-z0-9._-]* ]]; then echo "Projektname darf nur Buchstaben, Ziffern, . - _ enthalten"
+  if   [[ -z "$name" ]];               then msg err_name_empty; printf '\n'
+  elif [[ "$name" == *"/"* ]];         then msg err_name_slash; printf '\n'
+  elif [[ "$name" == *[[:space:]]* ]]; then msg err_name_space; printf '\n'
+  elif [[ "$name" == .* ]];            then msg err_name_dot; printf '\n'
+  elif [[ "$name" == *[!A-Za-z0-9._-]* ]]; then msg err_name_chars; printf '\n'
   else return 0; fi
   return 1
 }
@@ -862,8 +1019,8 @@ validate_project_name() {
 prompt_project_name() {
   local name="" reason=""
   while :; do
-    printf '%s' "  Projektname: " >&2
-    read -r name || err "Eingabe abgebrochen — Projektname erforderlich."
+    printf '%s' "$(msg prompt_project_name)" >&2
+    read -r name || err "$(msg err_input_aborted)"
     if reason="$(validate_project_name "$name")"; then
       printf '%s\n' "$name"; return 0
     fi
@@ -873,18 +1030,18 @@ prompt_project_name() {
 
 # Interaktiver Projekt-Assistent: fragt Name + Beschreibung ab.
 mode_wizard() {
-  printf '%s\n' "== tatara — Neues Projekt (interaktiv) =="
+  printf '%s\n' "$(msg header_wizard)"
   local name desc=""
   name="$(prompt_project_name)"
-  printf '%s' "  Beschreibung (optional, Enter = keine): " >&2
+  printf '%s' "$(msg prompt_description)" >&2
   read -r desc || true
   mode_tatara "$name" "$desc"
 }
 
 kickoff_instructions() {
   local target="$1"
-  printf '%s\n' "  Kickoff manuell starten:"
-  printf '%s\n' "    cd $target"
+  printf '%s\n' "$(msg kickoff_manual_header)"
+  printf '%s\n' "$(msg kickoff_manual_cd "$target")"
   printf '%s\n' "    claude"
   printf '%s\n' "    /kickoff      (falls nicht angeboten: /reload-skills, dann erneut)"
 }
@@ -892,25 +1049,25 @@ kickoff_instructions() {
 kickoff_handoff() {
   local target="$1"
   if [[ -n "${CLAUDECODE:-}" ]]; then
-    info "Claude-Code-Session erkannt — keine verschachtelte Kickoff-Session."
+    info "$(msg info_claudecode_session)"
     kickoff_instructions "$target"; return 0
   fi
   if ! check_claude; then
-    info "claude ist nicht verfuegbar — Kickoff-Skill liegt bereit."
+    info "$(msg info_claude_unavailable)"
     kickoff_instructions "$target"; return 0
   fi
   if ! claude_logged_in; then
-    info "claude ist nicht eingeloggt — Kickoff-Skill liegt bereit."
-    info "Erst einloggen: claude auth login — danach:"
+    info "$(msg info_claude_not_logged_in_kickoff)"
+    info "$(msg info_login_first)"
     kickoff_instructions "$target"; return 0
   fi
-  if confirm "Projekt-Kickoff jetzt starten (claude uebernimmt dieses Terminal)?"; then
-    log "Starte Kickoff-Session: claude /kickoff"
-    cd "$target" || { warn "Wechsel nach $target fehlgeschlagen."; kickoff_instructions "$target"; return 0; }
+  if confirm "$(msg confirm_kickoff)"; then
+    log "$(msg log_start_kickoff)"
+    cd "$target" || { warn "$(msg warn_cd_failed "$target")"; kickoff_instructions "$target"; return 0; }
     shopt -s execfail 2>/dev/null || true  # exec-Fail beendet die Shell NICHT
     set +e                                 # ... und loest unter set -e keinen Abbruch aus,
     exec claude "/kickoff"                  #     damit der Fallback erreichbar bleibt
-    warn "claude konnte nicht gestartet werden."
+    warn "$(msg warn_claude_start_failed)"
     kickoff_instructions "$target"; return 0
   fi
   kickoff_instructions "$target"; return 0
@@ -921,12 +1078,12 @@ mode_tatara() {
   local name="$1"
   local desc="${2:-}"
 
-  [[ -z "$name" ]] && err "Projektname erforderlich. Nutze 'tatara -h' fuer Hilfe."
+  [[ -z "$name" ]] && err "$(msg err_name_required)"
   local reason
   if ! reason="$(validate_project_name "$name")"; then err "$reason"; fi
 
   local target="$PROJECTS_ROOT/$name"
-  [[ -e "$target" ]] && err "$target existiert bereits"
+  [[ -e "$target" ]] && err "$(msg err_target_exists "$target")"
 
   # Pre-Flight: Pflicht (git/bd), Empfohlen (claude), Globals-Selbstheilung
   ensure_git
@@ -935,33 +1092,33 @@ mode_tatara() {
   local miss=() line
   while IFS= read -r line; do miss+=("$line"); done < <(missing_globals)
   if [[ ${#miss[@]} -gt 0 ]]; then
-    info "Globale Voraussetzungen unvollstaendig — bootstrappe fehlende Dateien"
+    info "$(msg info_globals_incomplete)"
     ensure_globals
   fi
 
-  printf '%s\n' "== Lege Projekt '$name' an =="
-  log "Verzeichnis: $target"
+  printf '%s\n' "$(msg header_new_project "$name")"
+  log "$(msg log_dir "$target")"
   mkdir -p "$target"
   cd "$target"
 
-  log "git init (default branch main)"
+  log "$(msg log_git_init)"
   git init -b main -q
 
-  log "Schreibe README.md, CLAUDE.md, .gitignore"
+  log "$(msg log_write_files)"
   tpl_readme_md "$name" "$desc" > README.md
   tpl_project_claude_md "$name" "$desc" > CLAUDE.md
   tpl_gitignore > .gitignore
 
-  log "Schreibe .claude/settings.json + post-commit-verify.sh"
+  log "$(msg log_write_claude_files)"
   mkdir -p .claude/hooks
   tpl_claude_settings_json > .claude/settings.json
   tpl_post_commit_verify_sh > .claude/hooks/post-commit-verify.sh
   chmod +x .claude/hooks/post-commit-verify.sh
-  log "Schreibe .claude/skills/kickoff/SKILL.md"
+  log "$(msg log_write_skill)"
   mkdir -p .claude/skills/kickoff
   tpl_kickoff_skill > .claude/skills/kickoff/SKILL.md
 
-  log "bd init (stealth, skip-hooks, skip-agents)"
+  log "$(msg log_bd_init)"
   BD_NON_INTERACTIVE=1 bd init \
     --skip-hooks --skip-agents --stealth --role maintainer >/dev/null
 
@@ -970,10 +1127,10 @@ mode_tatara() {
   # frische .gitignore; Schutzfunktion uebernimmt .git/info/exclude.
   # Unconditional ueberschreiben, weil .gitignore vor bd init nie staged
   # wurde -> git diff hat nichts zu vergleichen.
-  log "schreibe .gitignore neu (Beads-Stealth-Luecke schliessen)"
+  log "$(msg log_gitignore_rewrite)"
   tpl_gitignore > .gitignore
 
-  log "Initial commit"
+  log "$(msg log_initial_commit)"
   git add -A
   git commit -q -m "init: initial project scaffolding"
 
@@ -2152,7 +2309,7 @@ main() {
       fi
       ;;
     --*)
-      err "Unbekannte Option: $1. Nutze 'tatara -h' fuer Hilfe."
+      err "$(msg err_unknown_option "$1")"
       ;;
     *)
       mode_tatara "$@"
