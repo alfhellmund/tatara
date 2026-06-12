@@ -44,6 +44,10 @@ case "${1:-}" in
         printf '%s\n' "claude stub 0.0.0"
         exit 0
         ;;
+    /kickoff)
+        # Kickoff-Skill-Aufruf via exec claude "/kickoff"
+        exit 0
+        ;;
     *)
         # Unbekannte Aufrufe -> Fehler damit Tests nicht versehentlich gruenwerden
         printf '%s\n' "claude-stub: unbekannter Aufruf: $*" >&2

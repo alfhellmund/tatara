@@ -859,7 +859,8 @@ _path_no_bd() {
         || { echo "P3-AK-13b: Exit-Code $status erwartet 0. Output: $output"; false; }
     [ -d "${BATS_TEST_TMPDIR}/dev/proj" ] \
         || { echo "P3-AK-13b: Projekt 'proj' nicht angelegt. dev-Inhalt:"; ls "${BATS_TEST_TMPDIR}/dev" 2>/dev/null; false; }
-    # Kein Prompt der claude-Frage in der Ausgabe
-    [[ "$output" != *"[y/N]"* ]] \
-        || { echo "P3-AK-13b: '[y/N]'-Prompt fuer claude-Installation im Output — stört Wizard-stdin. Output: $output"; false; }
+    # Kein Install-Prompt stört Wizard-stdin: prüfe auf den install-spezifischen Anker
+    # (nicht auf "[y/N]" allgemein, da das neue Kickoff-confirm ebenfalls [y/N] ausgibt)
+    [[ "$output" != *"claude via offizielles Skript"* ]] \
+        || { echo "P3-AK-13b: claude-Install-Frage 'claude via offizielles Skript' im Output — stoert Wizard-stdin. Output: $output"; false; }
 }
