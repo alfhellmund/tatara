@@ -69,6 +69,136 @@ msg_fmt() {
     check_lang_locale)
       de='Sprache: %s (Quelle: locale)'
       en='Language: %s (source: locale)' ;;
+    # --- confirm ---
+    warn_non_interactive)
+      de="nicht-interaktiv — '%s' wird mit Nein beantwortet"
+      en="non-interactive — '%s' answered No" ;;
+    # --- ensure_claude ---
+    confirm_claude_install)
+      de='claude via offizielles Skript installieren (curl | bash von claude.ai)?'
+      en='Install claude via official script (curl | bash from claude.ai)?' ;;
+    info_claude_login)
+      de='Login (Browser-OAuth): claude auth login'
+      en='Login (browser OAuth): claude auth login' ;;
+    info_claude_manual_install)
+      de='Manuell installieren: curl -fsSL %s | bash  (oder: brew install --cask claude-code / npm install -g @anthropic-ai/claude-code)'
+      en='Install manually: curl -fsSL %s | bash  (or: brew install --cask claude-code / npm install -g @anthropic-ai/claude-code)' ;;
+    info_claude_no_login_opus)
+      de='Ohne Login waehlt tatara opus als Architekt-Modell (statt ggf. fable).'
+      en='Without login tatara uses opus as architect model (instead of fable).' ;;
+    info_claude_switch_fable)
+      de='Nach dem Login auf fable umstellen: rm ~/.claude/agents/architect.md ~/.claude/agents/architect-reviewer.md && tatara --bootstrap-globals'
+      en='After login switch to fable: rm ~/.claude/agents/architect.md ~/.claude/agents/architect-reviewer.md && tatara --bootstrap-globals' ;;
+    ok_claude_installed)
+      de='claude installiert'
+      en='claude installed' ;;
+    ok_claude_installed_version)
+      de='claude installiert (%s)'
+      en='claude installed (%s)' ;;
+    warn_claude_install_failed)
+      de='claude-Installation fehlgeschlagen. Alternativen: brew install --cask claude-code  /  npm install -g @anthropic-ai/claude-code'
+      en='claude installation failed. Alternatives: brew install --cask claude-code  /  npm install -g @anthropic-ai/claude-code' ;;
+    warn_claude_not_installed)
+      de='claude (Claude Code) ist nicht installiert.'
+      en='claude (Claude Code) is not installed.' ;;
+    warn_claude_not_logged_in)
+      de='claude ist installiert, aber nicht eingeloggt.'
+      en='claude is installed but not logged in.' ;;
+    warn_claude_path)
+      de="claude noch nicht im PATH — neue Shell oeffnen und 'tatara --check' ausfuehren."
+      en="claude not yet in PATH — open a new shell and run 'tatara --check'." ;;
+    # --- ensure_bd ---
+    confirm_bd_brew)
+      de="bd fehlt — via 'brew install beads' installieren?"
+      en="bd missing — install via 'brew install beads'?" ;;
+    confirm_bd_script)
+      de='bd via offizielles Beads-Skript installieren (curl | bash von gastownhall/beads)?'
+      en='Install bd via official Beads script (curl | bash from gastownhall/beads)?' ;;
+    err_bd_not_found)
+      de='bd nach Installation nicht im PATH gefunden — ggf. neue Shell oeffnen und erneut versuchen.'
+      en='bd not found in PATH after installation — try opening a new shell and running again.' ;;
+    err_bd_required)
+      de='Abgebrochen — bd wird benoetigt.'
+      en='Aborted — bd is required.' ;;
+    err_bd_required_manual)
+      de='Abgebrochen — bd wird benoetigt. Manuell: npm install -g @beads/bd'
+      en='Aborted — bd is required. Manual install: npm install -g @beads/bd' ;;
+    warn_bd_no_pkg_manager)
+      de='bd ist nicht in System-Paketmanagern verfuegbar.'
+      en='bd is not available in system package managers.' ;;
+    # --- ensure_git ---
+    confirm_git_brew)
+      de='git fehlt — via Homebrew installieren?'
+      en='git missing — install via Homebrew?' ;;
+    confirm_git_pkg)
+      de='git fehlt — via System-Paketmanager installieren (sudo)?'
+      en='git missing — install via system package manager (sudo)?' ;;
+    err_git_not_found)
+      de='git nach Installation weiterhin nicht gefunden'
+      en='git still not found after installation' ;;
+    err_git_required)
+      de='Abgebrochen — git wird benoetigt.'
+      en='Aborted — git is required.' ;;
+    err_git_required_alt)
+      de='Abgebrochen — git wird benoetigt. (Alternativ: xcode-select --install)'
+      en='Aborted — git is required. (Alternative: xcode-select --install)' ;;
+    # --- mode_check ---
+    info_arch_model_fable_auto)
+      de='Architekt-Modell: fable falls verfuegbar, sonst opus (final beim Bootstrap ermittelt)'
+      en='Architect model: fable if available, otherwise opus (determined at bootstrap)' ;;
+    info_arch_model_no_claude)
+      de='Architekt-Modell: opus (claude nicht verfuegbar)'
+      en='Architect model: opus (claude not available)' ;;
+    info_arch_model_opus_no_login)
+      de='Architekt-Modell: opus (nicht eingeloggt)'
+      en='Architect model: opus (not logged in)' ;;
+    info_arch_model_override)
+      de='Architekt-Modell: %s (Quelle: override via TATARA_ARCHITECT_MODEL)'
+      en='Architect model: %s (source: override via TATARA_ARCHITECT_MODEL)' ;;
+    info_claude_not_found_check)
+      de='claude: nicht gefunden — wird bei Setup zur Installation angeboten (%s)'
+      en='claude: not found — installation will be offered during setup (%s)' ;;
+    info_claude_session)
+      de='claude: laeuft bereits in einer Claude-Code-Session (CLAUDECODE)'
+      en='claude: already running in a Claude Code session (CLAUDECODE)' ;;
+    ok_bd_installed)
+      de='bd installiert (%s)'
+      en='bd installed (%s)' ;;
+    ok_claude_logged_in_check)
+      de='claude: installiert + eingeloggt'
+      en='claude: installed + logged in' ;;
+    ok_git_installed)
+      de='git installiert (%s)'
+      en='git installed (%s)' ;;
+    ok_globals_complete)
+      de='Alle globalen ~/.claude/* Dateien vorhanden'
+      en='All global ~/.claude/* files present' ;;
+    warn_bd_missing_check)
+      de='bd fehlt — wird bei Setup automatisch via brew angeboten'
+      en='bd missing — will be offered automatically via brew during setup' ;;
+    warn_claude_not_logged_in_check)
+      de="claude: installiert, aber nicht eingeloggt — 'claude auth login' ausfuehren"
+      en="claude: installed but not logged in — run 'claude auth login'" ;;
+    warn_git_missing_check)
+      de='git fehlt — wird bei Setup automatisch via brew angeboten'
+      en='git missing — will be offered automatically via brew during setup' ;;
+    warn_globals_missing)
+      de='Fehlende Globals:'
+      en='Missing globals:' ;;
+    warn_invalid_arch_model)
+      de="TATARA_ARCHITECT_MODEL='%s' ist ungueltig — erlaubt: fable, opus"
+      en="TATARA_ARCHITECT_MODEL='%s' is invalid — allowed: fable, opus" ;;
+    # --- pkg_install ---
+    err_pkg_no_brew)
+      de='%s fehlt und Homebrew ist nicht installiert. Installiere Homebrew: https://brew.sh'
+      en='%s missing and Homebrew is not installed. Install Homebrew: https://brew.sh' ;;
+    err_pkg_no_manager)
+      de='%s fehlt und kein unterstuetzter Paketmanager (apt/dnf/pacman/zypper/brew) gefunden.'
+      en='%s missing and no supported package manager (apt/dnf/pacman/zypper/brew) found.' ;;
+    # --- require_supported_os ---
+    err_os_unsupported)
+      de='tatara unterstuetzt derzeit macOS und Linux. Windows: bitte via WSL ausfuehren.'
+      en='tatara currently supports macOS and Linux. Windows: please run via WSL.' ;;
     # === END MESSAGE CATALOG ===
   esac
   if [[ "${TATARA_LANG:-en}" == de ]]; then printf '%s' "$de"; else printf '%s' "$en"; fi
@@ -230,7 +360,7 @@ claude_logged_in() {
 require_supported_os() {
   case "$OS" in
     Darwin|Linux) : ;;
-    *) err "tatara unterstuetzt derzeit macOS und Linux. Windows: bitte via WSL ausfuehren." ;;
+    *) err "$(msg err_os_unsupported)" ;;
   esac
 }
 
@@ -247,7 +377,7 @@ is_interactive() {
 confirm() {
   local answer=""
   if ! is_interactive; then
-    warn "nicht-interaktiv — '$1' wird mit Nein beantwortet"
+    warn "$(msg warn_non_interactive "$1")"
     return 1
   fi
   printf '%s' "  $1 [y/N] " >&2
@@ -262,7 +392,7 @@ pkg_install() {
   case "$OS" in
     Darwin)
       command -v brew >/dev/null 2>&1 \
-        || err "$name fehlt und Homebrew ist nicht installiert. Installiere Homebrew: https://brew.sh"
+        || err "$(msg err_pkg_no_brew "$name")"
       log "brew install $brewf"
       brew install "$brewf"
       ;;
@@ -279,7 +409,7 @@ pkg_install() {
       elif command -v brew >/dev/null 2>&1; then
         log "brew install $brewf"; brew install "$brewf"
       else
-        err "$name fehlt und kein unterstuetzter Paketmanager (apt/dnf/pacman/zypper/brew) gefunden."
+        err "$(msg err_pkg_no_manager "$name")"
       fi
       ;;
   esac
@@ -289,15 +419,15 @@ pkg_install() {
 ensure_git() {
   command -v git >/dev/null 2>&1 && return 0
   if [[ "$OS" == Darwin ]]; then
-    confirm "git fehlt — via Homebrew installieren?" \
-      || err "Abgebrochen — git wird benoetigt. (Alternativ: xcode-select --install)"
+    confirm "$(msg confirm_git_brew)" \
+      || err "$(msg err_git_required_alt)"
   else
-    confirm "git fehlt — via System-Paketmanager installieren (sudo)?" \
-      || err "Abgebrochen — git wird benoetigt."
+    confirm "$(msg confirm_git_pkg)" \
+      || err "$(msg err_git_required)"
   fi
   pkg_install git git git git git
   hash -r 2>/dev/null || true
-  command -v git >/dev/null 2>&1 || err "git nach Installation weiterhin nicht gefunden"
+  command -v git >/dev/null 2>&1 || err "$(msg err_git_not_found)"
   ok "git installiert"
 }
 
@@ -307,21 +437,21 @@ ensure_bd() {
   command -v bd >/dev/null 2>&1 && return 0
   if [[ "$OS" == Darwin ]] || command -v brew >/dev/null 2>&1; then
     command -v brew >/dev/null 2>&1 \
-      || err "bd fehlt und Homebrew ist nicht installiert. Installiere Homebrew: https://brew.sh"
-    confirm "bd fehlt — via 'brew install beads' installieren?" \
-      || err "Abgebrochen — bd wird benoetigt."
+      || err "$(msg err_pkg_no_brew "bd")"
+    confirm "$(msg confirm_bd_brew)" \
+      || err "$(msg err_bd_required)"
     log "brew install beads"
     brew install beads
   else
-    warn "bd ist nicht in System-Paketmanagern verfuegbar."
-    confirm "bd via offizielles Beads-Skript installieren (curl | bash von gastownhall/beads)?" \
-      || err "Abgebrochen — bd wird benoetigt. Manuell: npm install -g @beads/bd"
+    warn "$(msg warn_bd_no_pkg_manager)"
+    confirm "$(msg confirm_bd_script)" \
+      || err "$(msg err_bd_required_manual)"
     log "curl -fsSL $BEADS_INSTALL_URL | bash"
     curl -fsSL "$BEADS_INSTALL_URL" | bash
   fi
   hash -r 2>/dev/null || true
   command -v bd >/dev/null 2>&1 \
-    || err "bd nach Installation nicht im PATH gefunden — ggf. neue Shell oeffnen und erneut versuchen."
+    || err "$(msg err_bd_not_found)"
   ok "bd installiert"
 }
 
@@ -329,31 +459,31 @@ ensure_bd() {
 ensure_claude() {
   [[ -n "${CLAUDECODE:-}" ]] && return 0      # laeuft in Claude-Session -> No-op
   if ! check_claude; then
-    warn "claude (Claude Code) ist nicht installiert."
-    if confirm "claude via offizielles Skript installieren (curl | bash von claude.ai)?"; then
+    warn "$(msg warn_claude_not_installed)"
+    if confirm "$(msg confirm_claude_install)"; then
       log "curl -fsSL $CLAUDE_INSTALL_URL | bash"
       if ! curl -fsSL "$CLAUDE_INSTALL_URL" | bash; then
-        warn "claude-Installation fehlgeschlagen. Alternativen: brew install --cask claude-code  /  npm install -g @anthropic-ai/claude-code"
+        warn "$(msg warn_claude_install_failed)"
         return 0
       fi
       hash -r 2>/dev/null || true
       if check_claude; then
-        ok "claude installiert ($(claude --version 2>/dev/null))"
+        ok "$(msg ok_claude_installed_version "$(claude --version 2>/dev/null)")"
       else
-        ok "claude installiert"
-        warn "claude noch nicht im PATH — neue Shell oeffnen und 'tatara --check' ausfuehren."
+        ok "$(msg ok_claude_installed)"
+        warn "$(msg warn_claude_path)"
         return 0
       fi
     else
-      info "Manuell installieren: curl -fsSL $CLAUDE_INSTALL_URL | bash  (oder: brew install --cask claude-code / npm install -g @anthropic-ai/claude-code)"
+      info "$(msg info_claude_manual_install "$CLAUDE_INSTALL_URL")"
       return 0
     fi
   fi
   if ! claude_logged_in; then
-    warn "claude ist installiert, aber nicht eingeloggt."
-    info "Login (Browser-OAuth): claude auth login"
-    info "Ohne Login waehlt tatara opus als Architekt-Modell (statt ggf. fable)."
-    info "Nach dem Login auf fable umstellen: rm ~/.claude/agents/architect.md ~/.claude/agents/architect-reviewer.md && tatara --bootstrap-globals"
+    warn "$(msg warn_claude_not_logged_in)"
+    info "$(msg info_claude_login)"
+    info "$(msg info_claude_no_login_opus)"
+    info "$(msg info_claude_switch_fable)"
   fi
   return 0
 }
@@ -459,23 +589,23 @@ mode_check() {
   printf '%s\n' "== Pruefe Voraussetzungen =="
   local fail=0
   if check_git; then
-    ok "git installiert ($(git --version 2>/dev/null))"
+    ok "$(msg ok_git_installed "$(git --version 2>/dev/null)")"
   else
-    warn "git fehlt — wird bei Setup automatisch via brew angeboten"
+    warn "$(msg warn_git_missing_check)"
     fail=1
   fi
   if check_bd; then
-    ok "bd installiert ($(bd --version 2>/dev/null | head -1))"
+    ok "$(msg ok_bd_installed "$(bd --version 2>/dev/null | head -1)")"
   else
-    warn "bd fehlt — wird bei Setup automatisch via brew angeboten"
+    warn "$(msg warn_bd_missing_check)"
     fail=1
   fi
   local miss=() line
   while IFS= read -r line; do miss+=("$line"); done < <(missing_globals)
   if [[ ${#miss[@]} -eq 0 ]]; then
-    ok "Alle globalen ~/.claude/* Dateien vorhanden"
+    ok "$(msg ok_globals_complete)"
   else
-    warn "Fehlende Globals:"
+    warn "$(msg warn_globals_missing)"
     for m in "${miss[@]}"; do
       printf '%s\n' "        - $m"
     done
@@ -484,13 +614,13 @@ mode_check() {
   fi
   # Claude Code (empfohlen — Soft-Check, exit-neutral)
   if [[ -n "${CLAUDECODE:-}" ]]; then
-    info "claude: laeuft bereits in einer Claude-Code-Session (CLAUDECODE)"
+    info "$(msg info_claude_session)"
   elif ! check_claude; then
-    info "claude: nicht gefunden — wird bei Setup zur Installation angeboten ($CLAUDE_INSTALL_URL)"
+    info "$(msg info_claude_not_found_check "$CLAUDE_INSTALL_URL")"
   elif claude_logged_in; then
-    ok "claude: installiert + eingeloggt"
+    ok "$(msg ok_claude_logged_in_check)"
   else
-    warn "claude: installiert, aber nicht eingeloggt — 'claude auth login' ausfuehren"
+    warn "$(msg warn_claude_not_logged_in_check)"
   fi
 
   # Optionale KI-CLIs (Soft-Check, beeinflusst Exit-Code nicht)
@@ -508,20 +638,20 @@ mode_check() {
   if [[ -n "$env_val" ]]; then
     case "$env_val" in
       fable|opus)
-        info "Architekt-Modell: $env_val (Quelle: override via TATARA_ARCHITECT_MODEL)"
+        info "$(msg info_arch_model_override "$env_val")"
         ;;
       *)
-        warn "TATARA_ARCHITECT_MODEL='$env_val' ist ungueltig — erlaubt: fable, opus"
+        warn "$(msg warn_invalid_arch_model "$env_val")"
         fail=1
         ;;
     esac
   else
     if ! check_claude; then
-      info "Architekt-Modell: opus (claude nicht verfuegbar)"
+      info "$(msg info_arch_model_no_claude)"
     elif claude_logged_in; then
-      info "Architekt-Modell: fable falls verfuegbar, sonst opus (final beim Bootstrap ermittelt)"
+      info "$(msg info_arch_model_fable_auto)"
     else
-      info "Architekt-Modell: opus (nicht eingeloggt)"
+      info "$(msg info_arch_model_opus_no_login)"
     fi
   fi
 
