@@ -632,9 +632,7 @@ mode_tatara() {
 
   # Pre-Flight: Pflicht (git/bd), Empfohlen (claude), Globals-Selbstheilung
   ensure_git
-  ok "git: $(git --version 2>/dev/null)"
   ensure_bd
-  ok "bd: $(bd --version 2>/dev/null | head -1)"
   ensure_claude
   local miss=() line
   while IFS= read -r line; do miss+=("$line"); done < <(missing_globals)

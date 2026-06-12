@@ -79,27 +79,76 @@ _path_no_claude() {
     printf '%s' "${nodir}:${instbin}:${clean}"
 }
 
+# Bereitet einen PATH ohne claude vor und setzt Variablen direkt in der bats-Shell.
+# MUSS als normale Funktion aufgerufen werden (NICHT in $(...)), damit die
+# gesetzten Variablen in der bats-Shell sichtbar bleiben.
+# Nach dem Aufruf enthaelt $_NC_PATH den PATH-String und $_NC_INSTBIN_DST den
+# Zielpfad des Installers (innerhalb von _NC_PATH, damit check_claude TRUE wird).
+_setup_no_claude_env() {
+    local nodir="$BATS_TEST_TMPDIR/noclaudebin2_$$"
+    local instbin="$BATS_TEST_TMPDIR/instbin2_$$"
+    mkdir -p "$nodir" "$instbin"
+    cp "$STUBS_DIR/git"  "$nodir/git"
+    cp "$STUBS_DIR/bd"   "$nodir/bd"
+    cp "$STUBS_DIR/curl" "$nodir/curl"
+    printf '%s\n' '#!/usr/bin/env bash' 'printf "Darwin\n"' > "$nodir/uname"
+    chmod +x "$nodir/uname"
+    local clean="" dir
+    local IFS=':'
+    for dir in $PATH; do
+        [ -n "$dir" ] && [ -x "$dir/claude" ] && continue
+        clean="${clean:+$clean:}$dir"
+    done
+    # instbin ist im PATH: nach Install landet das claude-Binary dort -> check_claude TRUE
+    _NC_PATH="${nodir}:${instbin}:${clean}"
+    _NC_INSTBIN_DST="${instbin}/claude"
+}
+
+# PATH ohne bd: git + claude + curl da, bd NICHT.
+# Gibt den PATH-String aus.
+_path_no_bd() {
+    local nodir="$BATS_TEST_TMPDIR/nobdbin_$$"
+    mkdir -p "$nodir"
+    cp "$STUBS_DIR/git"    "$nodir/git"
+    cp "$STUBS_DIR/claude" "$nodir/claude"
+    cp "$STUBS_DIR/curl"   "$nodir/curl"
+    printf '%s\n' '#!/usr/bin/env bash' 'printf "Darwin\n"' > "$nodir/uname"
+    chmod +x "$nodir/uname"
+    local clean="" dir
+    local IFS=':'
+    for dir in $PATH; do
+        [ -n "$dir" ] && [ -x "$dir/bd" ] && continue
+        clean="${clean:+$clean:}$dir"
+    done
+    printf '%s' "${nodir}:${clean}"
+}
+
 # ==============================================================================
 # P3-AK-1 — claude fehlt, interaktiv, stdin y, CURL_STUB_MODE=ok ->
 #             curl-Call mit Install-URL, Output-Hinweis, Projekt angelegt
 # ==============================================================================
 
-@test "P3-AK-1: claude fehlt, TATARA_INTERACTIVE=1, stdin y, CURL_MODE=ok -> curl-Log hat install.sh-URL, Output zeigt curl-Befehl+Erfolg, Projekt angelegt, Exit 0" {
+@test "P3-AK-1: claude fehlt, TATARA_INTERACTIVE=1, stdin y, CURL_MODE=ok -> if-Zweig: 'claude installiert (' + Versions-String, curl-Log hat install.sh-URL, Projekt angelegt, Exit 0" {
     # P3-AK-1: ensure_claude soll bei fehlendem claude + Ja-Antwort den Installer
-    # via curl|bash ausfuehren. Nachweis: CURL_STUB_LOG enthaelt die Install-URL;
-    # Output zeigt den curl-Befehl + 'claude installiert'; Projekt wird angelegt.
+    # via curl|bash ausfuehren. Nach erfolgreichem Install ist check_claude TRUE
+    # (claude-Binary landet im PATH via _INSTBIN_DST), daher laeuft der if-Zweig:
+    #   ok "claude installiert ($(claude --version))"
+    # Nachweis: Output enthaelt 'claude installiert (' + Versions-String des claude-Stubs;
+    # CURL_STUB_LOG enthaelt die Install-URL; Projekt wird angelegt.
+    # Gegenprobe: Eine Mutation des if-Zweig-Strings wuerde diesen Test rot machen.
     _setup_full_globals
-    local no_claude_path
-    no_claude_path="$(_path_no_claude)"
+    # _setup_no_claude_env direkt aufrufen (NICHT in $(...)), damit $_NC_PATH
+    # und $_NC_INSTBIN_DST in der bats-Shell sichtbar sind
+    _setup_no_claude_env
 
     run bash -c "
         export HOME='${BATS_TEST_TMPDIR}/home'
         export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
-        export PATH='${no_claude_path}'
+        export PATH='${_NC_PATH}'
         export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
         export CURL_STUB_LOG='${CURL_STUB_LOG}'
         export CURL_STUB_INSTALL_SRC='${STUBS_DIR}/claude'
-        export CURL_STUB_INSTALL_DST='${CURL_STUB_INSTALL_DST:-}'
+        export CURL_STUB_INSTALL_DST='${_NC_INSTBIN_DST}'
         export CURL_STUB_MODE=ok
         export TATARA_INTERACTIVE=1
         unset CLAUDECODE
@@ -112,14 +161,66 @@ _path_no_claude() {
         || { echo "P3-AK-1: CURL_STUB_LOG nicht erzeugt — curl wurde nicht aufgerufen. Output: $output"; false; }
     grep -q 'https://claude.ai/install.sh' "$CURL_STUB_LOG" \
         || { echo "P3-AK-1: CURL_STUB_LOG enthaelt keine install.sh-URL. Log:"; cat "$CURL_STUB_LOG"; echo "Output: $output"; false; }
-    # Output muss den curl-Befehl und den Erfolgstext enthalten
+    # Output muss den curl-Befehl enthalten
     [[ "$output" == *"curl -fsSL https://claude.ai/install.sh"* ]] \
         || { echo "P3-AK-1: curl-Befehl nicht im Output sichtbar. Output: $output"; false; }
-    [[ "$output" == *"claude installiert"* ]] \
-        || { echo "P3-AK-1: 'claude installiert' nicht im Output. Output: $output"; false; }
+    # if-Zweig: Output muss 'claude installiert (' + Versions-String enthalten
+    # (beweist: check_claude ist nach Install TRUE, der if-Zweig wurde genommen)
+    [[ "$output" == *"claude installiert ("* ]] \
+        || { echo "P3-AK-1: 'claude installiert (' (if-Zweig) nicht im Output — entweder Binary nicht installiert oder else-Zweig genommen. Output: $output"; false; }
+    [[ "$output" == *"claude stub"* ]] \
+        || { echo "P3-AK-1: Versions-String 'claude stub' (aus claude --version) nicht im Output — if-Zweig nicht durchlaufen. Output: $output"; false; }
     # Projekt muss angelegt sein
     [ -d "${BATS_TEST_TMPDIR}/dev/proj" ] \
         || { echo "P3-AK-1: Projekt 'proj' nicht angelegt. dev-Inhalt:"; ls "${BATS_TEST_TMPDIR}/dev" 2>/dev/null; false; }
+}
+
+# ==============================================================================
+# P3-AK-1b — Install-else-Zweig: Binary landet NICHT im PATH -> 'noch nicht im PATH'
+# ==============================================================================
+
+@test "P3-AK-1b: claude fehlt, TATARA_INTERACTIVE=1, stdin y, CURL_MODE=ok, DST ausserhalb PATH -> else-Zweig: 'claude installiert' + 'noch nicht im PATH', Projekt angelegt, Exit 0" {
+    # P3-AK-1b: Wenn der Installer erfolgreich laeuft, aber das Binary ausserhalb des
+    # PATH landet (DST-Verzeichnis nicht im PATH), bleibt check_claude FALSE.
+    # Dann laeuft der else-Zweig:
+    #   ok "claude installiert"
+    #   warn "claude noch nicht im PATH..."
+    # Nachweis: Output enthaelt 'claude installiert' UND 'noch nicht im PATH'.
+    # Die Abwesenheit von 'claude installiert (' (if-Zweig) belegt, dass der else-Zweig aktiv ist.
+    _setup_full_globals
+    local no_claude_path
+    no_claude_path="$(_path_no_claude)"
+    # DST zeigt auf ein Verzeichnis, das NICHT im PATH ist
+    local outside_dir="${BATS_TEST_TMPDIR}/outside_$$"
+    mkdir -p "$outside_dir"
+    local outside_dst="${outside_dir}/claude"
+
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
+        export PATH='${no_claude_path}'
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CURL_STUB_LOG='${CURL_STUB_LOG}'
+        export CURL_STUB_INSTALL_SRC='${STUBS_DIR}/claude'
+        export CURL_STUB_INSTALL_DST='${outside_dst}'
+        export CURL_STUB_MODE=ok
+        export TATARA_INTERACTIVE=1
+        unset CLAUDECODE
+        printf 'y\n' | bash '${TATARA}' proj 2>&1
+    "
+    [ "$status" -eq 0 ] \
+        || { echo "P3-AK-1b: Exit-Code $status erwartet 0. Output: $output"; false; }
+    # else-Zweig: 'claude installiert' ohne Klammer + 'noch nicht im PATH'
+    [[ "$output" == *"claude installiert"* ]] \
+        || { echo "P3-AK-1b: 'claude installiert' nicht im Output. Output: $output"; false; }
+    [[ "$output" == *"noch nicht im PATH"* ]] \
+        || { echo "P3-AK-1b: 'noch nicht im PATH' (else-Zweig) nicht im Output. Output: $output"; false; }
+    # Explizit: if-Zweig darf NICHT aktiv sein (kein Versions-String)
+    [[ "$output" != *"claude installiert ("* ]] \
+        || { echo "P3-AK-1b: 'claude installiert (' im Output — if-Zweig statt else-Zweig aktiv (DST-Setup fehlerhaft?). Output: $output"; false; }
+    # Projekt muss angelegt sein
+    [ -d "${BATS_TEST_TMPDIR}/dev/proj" ] \
+        || { echo "P3-AK-1b: Projekt 'proj' nicht angelegt. dev-Inhalt:"; ls "${BATS_TEST_TMPDIR}/dev" 2>/dev/null; false; }
 }
 
 # ==============================================================================
@@ -635,16 +736,70 @@ _path_no_claude() {
 # P3-AK-13 — mode_tatara Reihenfolge + Wizard
 # ==============================================================================
 
-@test "P3-AK-13a: tatara proj, claude fehlt, non-interaktiv, volle Globals -> claude-Hinweis NACH git/bd-Checks, VOR Projekt-Anlage" {
-    # P3-AK-13a: Reihenfolge in mode_tatara: ensure_git/ensure_bd laufen VOR ensure_claude;
-    # Projekt-Anlage laeuft NACH ensure_claude.
-    # Nachweis: Im Output muss eine git-Erfolgs- oder ensure_git-bezogene Meldung
-    # vor dem claude-Warn-Hinweis (aus ensure_claude, mit 'claude' + Schluesselwort)
-    # erscheinen, und der claude-Hinweis vor "== Lege Projekt".
-    # Der spezifische claude-Hinweis muss 'claude' + 'nicht gefunden'/'fehlt'/'installieren'/
-    # 'nicht-interaktiv' enthalten (so wie in AK-10 definiert), damit er vom
-    # normalen Projekt-Text mit dem Wort 'claude' unterschieden werden kann.
+@test "P3-AK-13a: mode_tatara, bd fehlt, non-interaktiv -> bd-Fehler + Exit!=0, KEIN claude-Hinweis (beweist: ensure_claude laeuft NACH ensure_bd)" {
+    # P3-AK-13a: Beweis der Reihenfolge ensure_bd VOR ensure_claude in mode_tatara.
+    # Methode: Wenn bd fehlt und tatara non-interaktiv laeuft, bricht ensure_bd
+    # via err() ab (Exit 1), BEVOR ensure_claude aufgerufen wird.
+    # Nachweis:
+    #   - Exit != 0 (ensure_bd hat abgebrochen)
+    #   - Output enthaelt bd-Fehlermeldung ('bd' + 'fehlt'/'benoetigt'/'Homebrew')
+    #   - Output enthaelt KEINEN claude-Hinweis ('claude auth login' oder Install-Frage)
+    #     das beweist: ensure_claude wurde nie aufgerufen.
     _setup_full_globals
+    local no_bd_path
+    no_bd_path="$(_path_no_bd)"
+
+    run bash -c "
+        export HOME='${BATS_TEST_TMPDIR}/home'
+        export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
+        export PATH='${no_bd_path}'
+        export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CURL_STUB_LOG='${CURL_STUB_LOG}'
+        export TATARA_INTERACTIVE=0
+        unset CLAUDECODE
+        bash '${TATARA}' proj </dev/null 2>&1
+    "
+    # ensure_bd bricht via err() ab -> Exit != 0
+    [ "$status" -ne 0 ] \
+        || { echo "P3-AK-13a: Exit-Code 0 erwartet != 0 (ensure_bd muss abbrechen wenn bd fehlt + non-interaktiv). Output: $output"; false; }
+    # bd-Fehlermeldung muss im Output sein
+    local found_bd_err=0
+    [[ "$output" == *"bd fehlt"* ]]          && found_bd_err=1
+    [[ "$output" == *"bd wird benoetigt"* ]]  && found_bd_err=1
+    [[ "$output" == *"Homebrew"* ]]           && found_bd_err=1
+    [ "$found_bd_err" -eq 1 ] \
+        || { echo "P3-AK-13a: Kein bd-Fehlermeldung im Output (erwartet 'bd fehlt'/'bd wird benoetigt'/'Homebrew'). Output: $output"; false; }
+    # KEIN claude-Hinweis: ensure_claude wurde nie aufgerufen.
+    # Spezifische claude-Meldungen aus ensure_claude pruefen (nicht allgemeine Wrter wie 'installiert').
+    [[ "$output" != *"claude auth login"* ]] \
+        || { echo "P3-AK-13a: 'claude auth login' im Output — ensure_claude wurde aufgerufen obwohl ensure_bd abgebrochen hat (Reihenfolge falsch!). Output: $output"; false; }
+    # "claude (Claude Code) ist nicht installiert." — aus ensure_claude warn-Zeile
+    [[ "$output" != *"claude (Claude Code) ist nicht installiert"* ]] \
+        || { echo "P3-AK-13a: claude-Install-Warnung im Output — ensure_claude wurde aufgerufen obwohl ensure_bd abgebrochen hat (Reihenfolge falsch!). Output: $output"; false; }
+    # "claude via offizielles Skript installieren" — aus ensure_claude confirm-Frage
+    [[ "$output" != *"claude via offizielles Skript"* ]] \
+        || { echo "P3-AK-13a: claude-Install-Frage im Output — ensure_claude wurde aufgerufen obwohl ensure_bd abgebrochen hat (Reihenfolge falsch!). Output: $output"; false; }
+}
+
+# ==============================================================================
+# P3-AK-13c — mode_tatara: ensure_claude VOR ensure_globals (claude-Hinweis vor 'geschrieben:')
+# ==============================================================================
+
+@test "P3-AK-13c: mode_tatara, claude fehlt, git+bd da, Globals unvollstaendig, non-interaktiv -> claude-Hinweis VOR 'geschrieben:' (ensure_claude vor ensure_globals)" {
+    # P3-AK-13c: Beweis der Reihenfolge ensure_claude VOR ensure_globals in mode_tatara.
+    # Methode analog P3-AK-10: claude fehlt (non-interaktiv) -> ensure_claude erzeugt
+    # claude-Warn-Hinweis; danach ensure_globals schreibt fehlende Dateien ('geschrieben:').
+    # Der claude-Hinweis muss im Output VOR der ersten 'geschrieben:'-Zeile erscheinen.
+    # Globals unvollstaendig: eine Agenten-Datei fehlt, damit ensure_globals aktiv wird.
+    local claude_dir="${BATS_TEST_TMPDIR}/home/.claude"
+    local agents_dir="${claude_dir}/agents"
+    mkdir -p "$agents_dir"
+    printf 'dummy\n' > "${claude_dir}/CLAUDE.md"
+    printf 'dummy\n' > "${claude_dir}/software-development-workflow.md"
+    # Nur 5 von 6 Agenten-Dateien anlegen (architect.md fehlt -> Globals unvollstaendig)
+    for agent in architect-reviewer developer qa-reviewer security-reviewer test-writer; do
+        printf 'dummy\n' > "${agents_dir}/${agent}.md"
+    done
     local no_claude_path
     no_claude_path="$(_path_no_claude)"
 
@@ -659,37 +814,27 @@ _path_no_claude() {
         bash '${TATARA}' proj </dev/null 2>&1
     "
     [ "$status" -eq 0 ] \
-        || { echo "P3-AK-13a: Exit-Code $status erwartet 0. Output: $output"; false; }
-    # Reihenfolge pruefen: git/bd-Hinweis < spezif. claude-Warn-Hinweis < Projekt-Anlage
-    # git/bd: irgendeine Zeile mit 'git' oder 'bd' (die aus ensure_git/ensure_bd kommt)
-    # claude-Warn: Zeile mit 'claude' + Schluesselwort (aus ensure_claude)
-    # projekt: '== Lege Projekt' oder 'bereit:'
-    local git_line=0 claude_warn_line=0 projekt_line=0 lnum=0
+        || { echo "P3-AK-13c: Exit-Code $status erwartet 0. Output: $output"; false; }
+    # claude-Warn-Hinweis (ensure_claude) und 'geschrieben:' (ensure_globals) suchen
+    local claude_warn_line=0 geschrieben_line=0 lnum=0
     while IFS= read -r line; do
         lnum=$((lnum + 1))
-        if [[ $git_line -eq 0 ]] && { [[ "$line" == *"git"* ]] || [[ "$line" == *" bd "* ]] || [[ "$line" == *"[ok] bd"* ]]; }; then
-            git_line=$lnum
-        fi
         if [[ $claude_warn_line -eq 0 ]] \
            && [[ "$line" == *"claude"* ]] \
            && { [[ "$line" == *"nicht gefunden"* ]] || [[ "$line" == *"fehlt"* ]] \
                 || [[ "$line" == *"installieren"* ]] || [[ "$line" == *"nicht-interaktiv"* ]]; }; then
             claude_warn_line=$lnum
         fi
-        if [[ $projekt_line -eq 0 ]] && { [[ "$line" == *"Lege Projekt"* ]] || [[ "$line" == *"bereit:"* ]]; }; then
-            projekt_line=$lnum
+        if [[ $geschrieben_line -eq 0 ]] && [[ "$line" == *"geschrieben:"* ]]; then
+            geschrieben_line=$lnum
         fi
     done <<< "$output"
-    [ "$git_line" -gt 0 ] \
-        || { echo "P3-AK-13a: Keine git/bd-Meldung gefunden. Output: $output"; false; }
     [ "$claude_warn_line" -gt 0 ] \
-        || { echo "P3-AK-13a: Kein spezifischer claude-Warn-Hinweis gefunden (erwartet 'claude'+'nicht gefunden'/'fehlt'/'installieren'/'nicht-interaktiv'). Output: $output"; false; }
-    [ "$projekt_line" -gt 0 ] \
-        || { echo "P3-AK-13a: Keine Projekt-Anlage-Meldung ('Lege Projekt'/'bereit:') gefunden. Output: $output"; false; }
-    [ "$git_line" -lt "$claude_warn_line" ] \
-        || { echo "P3-AK-13a: git/bd-Meldung (Z.$git_line) erscheint NACH claude-Warn-Hinweis (Z.$claude_warn_line) — Reihenfolge falsch. Output: $output"; false; }
-    [ "$claude_warn_line" -lt "$projekt_line" ] \
-        || { echo "P3-AK-13a: claude-Warn-Hinweis (Z.$claude_warn_line) erscheint NACH Projekt-Anlage (Z.$projekt_line) — Reihenfolge falsch. Output: $output"; false; }
+        || { echo "P3-AK-13c: Kein claude-Warn-Hinweis aus ensure_claude gefunden. Output: $output"; false; }
+    [ "$geschrieben_line" -gt 0 ] \
+        || { echo "P3-AK-13c: Keine 'geschrieben:'-Zeile gefunden (Globals nicht gebootstrappt?). Output: $output"; false; }
+    [ "$claude_warn_line" -lt "$geschrieben_line" ] \
+        || { echo "P3-AK-13c: claude-Warn-Hinweis (Z.$claude_warn_line) erscheint NACH 'geschrieben:' (Z.$geschrieben_line) — ensure_claude laeuft nicht vor ensure_globals. Output: $output"; false; }
 }
 
 @test "P3-AK-13b: Wizard, claude da+eingeloggt, stdin 'proj\\n\\n' -> Projekt angelegt, Exit 0, kein claude-Prompt der stdin stoert" {
