@@ -302,7 +302,10 @@ _path_real_git() {
         main() { :; }
         source '${TATARA}' >/dev/null 2>&1 || true
         set +euo pipefail
-        printf 'y\n' | kickoff_handoff '${test_dir}'
+        # Herestring statt Pipe: kickoff_handoff laeuft in der Haupt-Shell
+        # (keine Pipe-Subshell, bash-3.2-robust ohne lastpipe) -> exec ersetzt
+        # diese Shell, 'echo NICHT_ERSETZT' wird bei korrektem exec nie erreicht.
+        kickoff_handoff '${test_dir}' <<< 'y'
         echo NICHT_ERSETZT
     "
     [[ "$output" != *"NICHT_ERSETZT"* ]] \

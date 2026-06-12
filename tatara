@@ -50,6 +50,7 @@ PROJEKT-LAYOUT
     .claude/
       settings.json                    PostToolUse-Hook -> post-commit-verify.sh
       hooks/post-commit-verify.sh      Zeigt git show HEAD --stat nach jedem Commit
+      skills/kickoff/SKILL.md          Kickoff-Skill fuer claude /kickoff
     .gitignore                         macOS/IDE/Secrets-Standard
     CLAUDE.md                          Projekt-CLAUDE.md mit Build-/Stack-Platzhaltern
     README.md                          Minimal mit Name + Beschreibung
@@ -590,6 +591,7 @@ validate_project_name() {
   elif [[ "$name" == *"/"* ]];         then echo "Projektname darf kein / enthalten"
   elif [[ "$name" == *[[:space:]]* ]]; then echo "Projektname darf keine Leerzeichen enthalten"
   elif [[ "$name" == .* ]];            then echo "Projektname darf nicht mit . beginnen"
+  elif [[ "$name" == *[!A-Za-z0-9._-]* ]]; then echo "Projektname darf nur Buchstaben, Ziffern, . - _ enthalten"
   else return 0; fi
   return 1
 }
@@ -616,6 +618,40 @@ mode_wizard() {
   printf '%s' "  Beschreibung (optional, Enter = keine): " >&2
   read -r desc || true
   mode_tatara "$name" "$desc"
+}
+
+kickoff_instructions() {
+  local target="$1"
+  printf '%s\n' "  Kickoff manuell starten:"
+  printf '%s\n' "    cd $target"
+  printf '%s\n' "    claude"
+  printf '%s\n' "    /kickoff      (falls nicht angeboten: /reload-skills, dann erneut)"
+}
+
+kickoff_handoff() {
+  local target="$1"
+  if [[ -n "${CLAUDECODE:-}" ]]; then
+    info "Claude-Code-Session erkannt — keine verschachtelte Kickoff-Session."
+    kickoff_instructions "$target"; return 0
+  fi
+  if ! check_claude; then
+    info "claude ist nicht verfuegbar — Kickoff-Skill liegt bereit."
+    kickoff_instructions "$target"; return 0
+  fi
+  if ! claude_logged_in; then
+    info "claude ist nicht eingeloggt — Kickoff-Skill liegt bereit."
+    info "Erst einloggen: claude auth login — danach:"
+    kickoff_instructions "$target"; return 0
+  fi
+  if confirm "Projekt-Kickoff jetzt starten (claude uebernimmt dieses Terminal)?"; then
+    log "Starte Kickoff-Session: claude /kickoff"
+    cd "$target" || { warn "Wechsel nach $target fehlgeschlagen."; kickoff_instructions "$target"; return 0; }
+    shopt -s execfail 2>/dev/null || true
+    exec claude "/kickoff"
+    warn "claude konnte nicht gestartet werden."
+    kickoff_instructions "$target"; return 0
+  fi
+  kickoff_instructions "$target"; return 0
 }
 
 # === Mode: neues Projekt ===
@@ -659,6 +695,9 @@ mode_tatara() {
   tpl_claude_settings_json > .claude/settings.json
   tpl_post_commit_verify_sh > .claude/hooks/post-commit-verify.sh
   chmod +x .claude/hooks/post-commit-verify.sh
+  log "Schreibe .claude/skills/kickoff/SKILL.md"
+  mkdir -p .claude/skills/kickoff
+  tpl_kickoff_skill > .claude/skills/kickoff/SKILL.md
 
   log "bd init (stealth, skip-hooks, skip-agents)"
   BD_NON_INTERACTIVE=1 bd init \
@@ -679,10 +718,7 @@ mode_tatara() {
   printf '%s\n' ""
   ok "Projekt '$name' bereit: $target"
   printf '%s\n' ""
-  printf '%s\n' "Naechste Schritte:"
-  printf '%s\n' "  cd $target"
-  printf '%s\n' "  # Stack/Sprache + Build-Kommandos in CLAUDE.md ergaenzen"
-  printf '%s\n' "  # Erste Beads-Issues anlegen: bd create 'Setup XYZ' --type task"
+  kickoff_handoff "$target"
 }
 
 # ============================================================================
@@ -856,6 +892,34 @@ jq -n --arg stat "$stat" '{
   }
 }'
 HOOK_END
+}
+
+tpl_kickoff_skill() {
+  cat <<'KICKOFF_SKILL_END'
+---
+description: Projekt-Kickoff fuer ein frisch von tatara angelegtes Projekt - befragt den User zur Projektidee, erstellt ein technisches Konzept inkl. Groessen- und Aufwandsschaetzung und ueberfuehrt es in den Entwicklungs-Workflow.
+disable-model-invocation: true
+---
+
+# Projekt-Kickoff
+
+Dieses Projekt wurde gerade von tatara angelegt (Geruest: git, Beads, CLAUDE.md, Hooks). Fuehre jetzt den Kickoff in vier Schritten:
+
+## 1. Befragen
+Frage den User nach: Projektidee und Thema, Zielen und Zielgruppe, gewuenschtem Stack bzw. Programmiersprache, Rahmenbedingungen. Stelle Rueckfragen, bis das Bild klar ist.
+
+## 2. Technisches Konzept erstellen
+Erstelle als Architekt ein technisches Konzept: Architektur, Stack, Kernkomponenten, Datenhaltung, Risiken. Folge dem globalen Arbeitsablauf: ~/.claude/software-development-workflow.md (Architekt -> Plan -> QA -> User-Freigabe -> Umsetzung -> QA).
+
+## 3. Groesse und Aufwand schaetzen
+Schaetze Projektgroesse und Aufwand (z.B. S/M/L mit Phasen/Meilensteinen) und stimme den Schnitt mit dem User ab.
+
+## 4. In den Workflow ueberfuehren
+- Konzept in Beads-Issues ueberfuehren: bd create "<Titel>" --type task
+- CLAUDE.md-Platzhalter ausfuellen (Stack, Build-Kommandos, Sprache, Konventionen)
+- Globale Subagenten nutzen: architect, architect-reviewer, developer, qa-reviewer, security-reviewer, test-writer
+- Mit der Umsetzung erst nach User-Freigabe des Konzepts beginnen
+KICKOFF_SKILL_END
 }
 
 # === BEGIN AUTO-SNAPSHOT TEMPLATES ===
