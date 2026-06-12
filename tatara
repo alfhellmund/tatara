@@ -16,9 +16,10 @@ set -euo pipefail
 PROJECTS_ROOT="${PROJECTS_ROOT:-$HOME/Development}"
 CLAUDE_GLOBAL_DIR="$HOME/.claude"
 SUBAGENTS=(architect architect-reviewer developer qa-reviewer security-reviewer test-writer)
-AI_CLIS=(claude gemini codex)   # optionale KI-CLIs, nur Soft-Check in --check
+AI_CLIS=(gemini codex)           # optionale KI-CLIs (Soft-Check in --check; claude hat eigenen Statusblock)
 OS="$(uname)"
 BEADS_INSTALL_URL="https://raw.githubusercontent.com/gastownhall/beads/main/scripts/install.sh"
+CLAUDE_INSTALL_URL="https://claude.ai/install.sh"
 
 # === Ausgabe-Helfer ===
 log()  { printf '%s\n' "  -> $1"; }
@@ -59,6 +60,8 @@ GLOBALE VORAUSSETZUNGEN (geprueft vor jedem Setup)
                                        Linux: apt / dnf / pacman / zypper (oder brew)
   git, bd                              fehlen sie, bietet tatara die Installation an
                                        (bd auf Linux via brew oder offizielles Skript)
+  claude (Claude Code)                 empfohlen; Login: claude auth login
+                                       (Soft-Check — tatara laeuft ohne claude)
   ~/.claude/CLAUDE.md                  Globale Workflow-Regeln
   ~/.claude/software-development-workflow.md
   ~/.claude/agents/<6 Subagenten>.md   architect, architect-reviewer, developer,
@@ -87,6 +90,16 @@ check_bd() {
 
 check_git() {
   command -v git >/dev/null 2>&1
+}
+
+check_claude() { command -v claude >/dev/null 2>&1; }
+
+# 0 = eingeloggt, 1 = nicht/kein claude. stdout IMMER leer (Privacy).
+claude_logged_in() {
+  check_claude || return 1
+  local auth_out
+  auth_out="$(claude auth status </dev/null 2>/dev/null || true)"
+  printf '%s' "$auth_out" | grep -Eq '"loggedIn"[[:space:]]*:[[:space:]]*true'
 }
 
 # Bricht ab, wenn die Plattform nicht unterstuetzt wird.
@@ -188,6 +201,39 @@ ensure_bd() {
   ok "bd installiert"
 }
 
+# claude (Claude Code): Soft-Check — returnt IMMER 0, blockiert/exit-et NIE.
+ensure_claude() {
+  [[ -n "${CLAUDECODE:-}" ]] && return 0      # laeuft in Claude-Session -> No-op
+  if ! check_claude; then
+    warn "claude (Claude Code) ist nicht installiert."
+    if confirm "claude via offizielles Skript installieren (curl | bash von claude.ai)?"; then
+      log "curl -fsSL $CLAUDE_INSTALL_URL | bash"
+      if ! curl -fsSL "$CLAUDE_INSTALL_URL" | bash; then
+        warn "claude-Installation fehlgeschlagen. Alternativen: brew install --cask claude-code  /  npm install -g @anthropic-ai/claude-code"
+        return 0
+      fi
+      hash -r 2>/dev/null || true
+      if check_claude; then
+        ok "claude installiert ($(claude --version 2>/dev/null))"
+      else
+        ok "claude installiert"
+        warn "claude noch nicht im PATH — neue Shell oeffnen und 'tatara --check' ausfuehren."
+        return 0
+      fi
+    else
+      info "Manuell installieren: curl -fsSL $CLAUDE_INSTALL_URL | bash  (oder: brew install --cask claude-code / npm install -g @anthropic-ai/claude-code)"
+      return 0
+    fi
+  fi
+  if ! claude_logged_in; then
+    warn "claude ist installiert, aber nicht eingeloggt."
+    info "Login (Browser-OAuth): claude auth login"
+    info "Ohne Login waehlt tatara opus als Architekt-Modell (statt ggf. fable)."
+    info "Nach dem Login auf fable umstellen: rm ~/.claude/agents/architect.md ~/.claude/agents/architect-reviewer.md && tatara --bootstrap-globals"
+  fi
+  return 0
+}
+
 # shellcheck disable=SC2088  # ~/.claude/... sind Anzeige-Strings (kein Pfad-Expand noetig)
 missing_globals() {
   local missing=()
@@ -216,11 +262,8 @@ fable_available() {
     return 1
   fi
 
-  local auth_out
-  auth_out="$(claude auth status </dev/null 2>/dev/null || true)"
-
-  # loggedIn whitespace-tolerant pruefen
-  if ! printf '%s' "$auth_out" | grep -Eq '"loggedIn"[[:space:]]*:[[:space:]]*true'; then
+  # Hinweis: dieser -p-Probe-Call laeuft auch unter CLAUDECODE (verschachtelt) — Bestandsverhalten, Adressierung fruehestens Phase 4.
+  if ! claude_logged_in; then
     echo "not-logged-in"
     return 1
   fi
@@ -315,6 +358,17 @@ mode_check() {
     printf '%s\n' "        -> tatara --bootstrap-globals"
     fail=1
   fi
+  # Claude Code (empfohlen — Soft-Check, exit-neutral)
+  if [[ -n "${CLAUDECODE:-}" ]]; then
+    info "claude: laeuft bereits in einer Claude-Code-Session (CLAUDECODE)"
+  elif ! check_claude; then
+    info "claude: nicht gefunden — wird bei Setup zur Installation angeboten ($CLAUDE_INSTALL_URL)"
+  elif claude_logged_in; then
+    ok "claude: installiert + eingeloggt"
+  else
+    warn "claude: installiert, aber nicht eingeloggt — 'claude auth login' ausfuehren"
+  fi
+
   # Optionale KI-CLIs (Soft-Check, beeinflusst Exit-Code nicht)
   local cli
   for cli in "${AI_CLIS[@]}"; do
@@ -338,16 +392,12 @@ mode_check() {
         ;;
     esac
   else
-    if ! command -v claude >/dev/null 2>&1; then
+    if ! check_claude; then
       info "Architekt-Modell: opus (claude nicht verfuegbar)"
+    elif claude_logged_in; then
+      info "Architekt-Modell: fable falls verfuegbar, sonst opus (final beim Bootstrap ermittelt)"
     else
-      local auth_out
-      auth_out="$(claude auth status </dev/null 2>/dev/null || true)"
-      if ! printf '%s' "$auth_out" | grep -Eq '"loggedIn"[[:space:]]*:[[:space:]]*true'; then
-        info "Architekt-Modell: opus (nicht eingeloggt)"
-      else
-        info "Architekt-Modell: fable falls verfuegbar, sonst opus (final beim Bootstrap ermittelt)"
-      fi
+      info "Architekt-Modell: opus (nicht eingeloggt)"
     fi
   fi
 
@@ -422,6 +472,7 @@ ensure_globals() {
 
 mode_bootstrap_globals() {
   printf '%s\n' "== Bootstrap globale ~/.claude/* Dateien =="
+  ensure_claude
   ensure_globals
   printf '%s\n' ""
   ensure_git
@@ -579,9 +630,12 @@ mode_tatara() {
   local target="$PROJECTS_ROOT/$name"
   [[ -e "$target" ]] && err "$target existiert bereits"
 
-  # Pre-Flight
+  # Pre-Flight: Pflicht (git/bd), Empfohlen (claude), Globals-Selbstheilung
   ensure_git
+  ok "git: $(git --version 2>/dev/null)"
   ensure_bd
+  ok "bd: $(bd --version 2>/dev/null | head -1)"
+  ensure_claude
   local miss=() line
   while IFS= read -r line; do miss+=("$line"); done < <(missing_globals)
   if [[ ${#miss[@]} -gt 0 ]]; then
