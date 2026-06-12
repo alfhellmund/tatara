@@ -635,7 +635,7 @@ _setup_full_globals() {
 # I18N-AK-H1 — err-Praefix lokalisiert: en -> '[error]'; de -> '[fehler]'
 # ==============================================================================
 
-@test "I18N-AK-H1a: TATARA_LANG=en + leerer Projektname -> stderr enthaelt '[error]', nicht '[fehler]'" {
+@test "I18N-AK-H1a: TATARA_LANG=en + unbekannte Option (err-Pfad) -> stderr enthaelt '[error]', nicht '[fehler]'" {
     run bash -c "
         export HOME='${BATS_TEST_TMPDIR}/home'
         export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
@@ -644,15 +644,15 @@ _setup_full_globals() {
         export LC_ALL=en_US.UTF-8
         export LANG=en_US.UTF-8
         export LC_MESSAGES=en_US.UTF-8
-        bash '${TATARA}' '' 2>&1
+        bash '${TATARA}' --unknown-xyz 2>&1
     "
     [[ "$output" == *"[error]"* ]] \
-        || { echo "I18N-AK-H1a: TATARA_LANG=en + leerer Name -> erwartet '[error]' im Output. Output: $output"; false; }
+        || { echo "I18N-AK-H1a: TATARA_LANG=en + unbekannte Option -> erwartet '[error]' im Output. Output: $output"; false; }
     [[ "$output" != *"[fehler]"* ]] \
-        || { echo "I18N-AK-H1a: TATARA_LANG=en + leerer Name -> '[fehler]' darf nicht erscheinen. Output: $output"; false; }
+        || { echo "I18N-AK-H1a: TATARA_LANG=en + unbekannte Option -> '[fehler]' darf nicht erscheinen. Output: $output"; false; }
 }
 
-@test "I18N-AK-H1b: TATARA_LANG=de + leerer Projektname -> stderr enthaelt '[fehler]', nicht '[error]'" {
+@test "I18N-AK-H1b: TATARA_LANG=de + unbekannte Option (err-Pfad) -> stderr enthaelt '[fehler]', nicht '[error]'" {
     run bash -c "
         export HOME='${BATS_TEST_TMPDIR}/home'
         export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
@@ -661,12 +661,12 @@ _setup_full_globals() {
         export LC_ALL=de_DE.UTF-8
         export LANG=de_DE.UTF-8
         export LC_MESSAGES=de_DE.UTF-8
-        bash '${TATARA}' '' 2>&1
+        bash '${TATARA}' --unknown-xyz 2>&1
     "
     [[ "$output" == *"[fehler]"* ]] \
-        || { echo "I18N-AK-H1b: TATARA_LANG=de + leerer Name -> erwartet '[fehler]' im Output. Output: $output"; false; }
+        || { echo "I18N-AK-H1b: TATARA_LANG=de + unbekannte Option -> erwartet '[fehler]' im Output. Output: $output"; false; }
     [[ "$output" != *"[error]"* ]] \
-        || { echo "I18N-AK-H1b: TATARA_LANG=de + leerer Name -> '[error]' darf nicht erscheinen. Output: $output"; false; }
+        || { echo "I18N-AK-H1b: TATARA_LANG=de + unbekannte Option -> '[error]' darf nicht erscheinen. Output: $output"; false; }
 }
 
 # ==============================================================================

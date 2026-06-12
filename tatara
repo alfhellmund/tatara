@@ -26,9 +26,72 @@ log()  { printf '%s\n' "  -> $1"; }
 ok()   { printf '%s\n' "  [ok] $1"; }
 info() { printf '%s\n' "  [info] $1"; }
 warn() { printf '%s\n' "  [warn] $1" >&2; }
-err()  { printf '%s\n' "  [fehler] $1" >&2; exit 1; }
+err()  { printf '%s\n' "  $(msg prefix_error) $1" >&2; exit 1; }
+
+# === i18n: Spracherkennung + Message-Katalog (de/en, single-file, offline) ===
+# Systemsprache aus der Locale ableiten: nur klares de-Praefix (inkl. Legacy-
+# Aliasse german/deutsch) -> de; alles andere -> en (Default).
+detect_lang() {
+  local loc="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+  case "$loc" in
+    [Dd][Ee]|[Dd][Ee][_.@-]*|[Gg]erman*|[Dd]eutsch*) printf 'de' ;;
+    *)                                                printf 'en' ;;
+  esac
+}
+
+# TATARA_LANG-Override aufloesen: de|en gueltig, leer=ungesetzt (Locale), sonst RC 1.
+resolve_lang() {
+  case "${TATARA_LANG:-}" in
+    de|en) printf '%s' "$TATARA_LANG" ;;
+    '')    detect_lang ;;
+    *)     return 1 ;;
+  esac
+}
+
+# Message-Katalog: pro Key EIN case-Zweig mit de UND en (Paritaet by construction).
+# Werte sind printf-Formate mit identischer Argument-Reihenfolge in beiden Sprachen.
+msg_fmt() {
+  local de='' en=''
+  case "$1" in
+    # === BEGIN MESSAGE CATALOG ===
+    prefix_error)
+      de='[fehler]'
+      en='[error]' ;;
+    warn_invalid_lang)
+      de="TATARA_LANG='%s' ist ungueltig — erlaubt: de, en"
+      en="TATARA_LANG='%s' is invalid — allowed: de, en" ;;
+    tatara_project_ready)
+      de="Projekt '%s' bereit: %s"
+      en="Project '%s' ready: %s" ;;
+    check_lang_override)
+      de='Sprache: %s (Quelle: override via TATARA_LANG)'
+      en='Language: %s (source: override via TATARA_LANG)' ;;
+    check_lang_locale)
+      de='Sprache: %s (Quelle: locale)'
+      en='Language: %s (source: locale)' ;;
+    # === END MESSAGE CATALOG ===
+  esac
+  if [[ "${TATARA_LANG:-en}" == de ]]; then printf '%s' "$de"; else printf '%s' "$en"; fi
+}
+
+# msg KEY [ARG...] -> lokalisierter Text auf stdout (ohne Trailing-Newline).
+# ARGs sind printf-ARGUMENTE (nie Format -> keine Injection). Unbekannter Key fail-soft.
+msg() {
+  local key="$1"; shift
+  local fmt; fmt="$(msg_fmt "$key")"
+  if [[ -z "$fmt" ]]; then
+    printf '%s\n' "  [warn] missing i18n key: $key" >&2
+    printf '??%s??' "$key"; return 0
+  fi
+  # shellcheck disable=SC2059  # fmt stammt NUR aus dem internen Katalog, nie aus User-Input
+  printf "$fmt" "$@"
+}
 
 show_help() {
+  case "${TATARA_LANG:-en}" in de) show_help_de ;; *) show_help_en ;; esac
+}
+
+show_help_de() {
   cat <<'HELP'
 tatara — Bootstrap fuer neue Projekte mit Git + Beads + Claude-Workflow.
 
@@ -74,6 +137,8 @@ UMGEBUNGSVARIABLEN
   TATARA_INTERACTIVE               1 erzwingt interaktiven Modus (Wizard ohne Argumente);
                                    0 unterbindet Interaktivitaet (Non-TTY-Modus);
                                    Default: Auto-Erkennung via TTY-Erkennung
+  TATARA_LANG                      Sprache erzwingen: de | en
+                                   Default: Auto-Erkennung via Locale
   PROJECTS_ROOT                    Basisverzeichnis fuer neue Projekte
                                    Default: ~/Development
 
@@ -81,6 +146,64 @@ Auf einem neuen Rechner zuerst:
   macOS:  Homebrew installieren (https://brew.sh)
   Linux:  ein Paketmanager (apt/dnf/pacman/zypper) vorhanden
   dann:   tatara --bootstrap-globals
+HELP
+}
+
+show_help_en() {
+  cat <<'HELP'
+tatara — bootstrap for new projects with Git + Beads + Claude workflow.
+
+USAGE
+  tatara                         No arguments: on an interactive terminal starts
+                                      an assistant (project name, description),
+                                      otherwise shows this help
+  tatara <NAME> [DESCRIPTION]    Create a new project under ~/Development/<NAME>
+  tatara --check                 Check global prerequisites + optional AI CLIs
+  tatara --bootstrap-globals     Create missing global ~/.claude/* files
+  tatara --snapshot-globals      Write the current ~/.claude/* files back into the
+                                      script as templates (backup as .bak)
+  tatara -h | --help             This help
+
+PROJECT LAYOUT
+  ~/Development/<NAME>/
+    .git/                              Git repository (default branch main)
+    .beads/                            Local Beads DB (stealth, not in git)
+    .claude/
+      settings.json                    PostToolUse hook -> post-commit-verify.sh
+      hooks/post-commit-verify.sh      Prints git show HEAD --stat after each commit
+      skills/kickoff/SKILL.md          Kickoff skill for claude /kickoff
+    .gitignore                         macOS/IDE/secrets defaults
+    CLAUDE.md                          Project CLAUDE.md with build/stack placeholders
+    README.md                          Minimal, name + description
+
+GLOBAL PREREQUISITES (checked before every setup)
+  Platform                             macOS or Linux (Windows: via WSL)
+  Package manager                      macOS: Homebrew (https://brew.sh)
+                                       Linux: apt / dnf / pacman / zypper (or brew)
+  git, bd                              if missing, tatara offers to install them
+                                       (bd on Linux via brew or official script)
+  claude (Claude Code)                 recommended; login: claude auth login
+                                       (soft check — tatara runs without claude)
+  ~/.claude/CLAUDE.md                  Global workflow rules
+  ~/.claude/software-development-workflow.md
+  ~/.claude/agents/<6 subagents>.md    architect, architect-reviewer, developer,
+                                       qa-reviewer, security-reviewer, test-writer
+
+ENVIRONMENT VARIABLES
+  TATARA_ARCHITECT_MODEL           Force architect model: fable | opus
+                                   Default: auto-detect via fable availability
+  TATARA_INTERACTIVE               1 forces interactive mode (wizard without args);
+                                   0 disables interactivity (non-TTY mode);
+                                   Default: auto-detect via TTY detection
+  TATARA_LANG                      Force language: de | en
+                                   Default: auto-detect via locale
+  PROJECTS_ROOT                    Base directory for new projects
+                                   Default: ~/Development
+
+On a fresh machine first:
+  macOS:  install Homebrew (https://brew.sh)
+  Linux:  a package manager (apt/dnf/pacman/zypper) available
+  then:   tatara --bootstrap-globals
 HELP
 }
 
@@ -402,6 +525,13 @@ mode_check() {
     fi
   fi
 
+  # Sprach-Policy (Soft-Check)
+  if [[ "$TATARA_LANG_SOURCE" == override ]]; then
+    info "$(msg check_lang_override "$TATARA_LANG")"
+  else
+    info "$(msg check_lang_locale "$TATARA_LANG")"
+  fi
+
   exit $fail
 }
 
@@ -718,7 +848,7 @@ mode_tatara() {
   git commit -q -m "init: initial project scaffolding"
 
   printf '%s\n' ""
-  ok "Projekt '$name' bereit: $target"
+  ok "$(msg tatara_project_ready "$name" "$target")"
   printf '%s\n' ""
   kickoff_handoff "$target"
 }
@@ -1899,5 +2029,14 @@ main() {
       ;;
   esac
 }
+
+# Sprache einmalig aufloesen + cachen (non-fatal: ungueltiger Override -> warn + Locale).
+TATARA_LANG_SOURCE="locale"
+[[ -n "${TATARA_LANG:-}" ]] && TATARA_LANG_SOURCE=override
+_tatara_lang_req="${TATARA_LANG:-}"
+if ! TATARA_LANG="$(resolve_lang)"; then
+  TATARA_LANG="$(detect_lang)"; TATARA_LANG_SOURCE="locale"
+  warn "$(msg warn_invalid_lang "$_tatara_lang_req")"
+fi
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi
