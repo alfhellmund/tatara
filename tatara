@@ -1159,15 +1159,30 @@ mode_tatara() {
 # ============================================================================
 
 tpl_readme_md() {
+  case "${TATARA_LANG:-en}" in de) tpl_readme_md_de "$@" ;; *) tpl_readme_md_en "$@" ;; esac
+}
+
+tpl_readme_md_de() {
   local name="$1" desc="$2"
   printf '# %s\n\n' "$name"
   [[ -n "$desc" ]] && printf '%s\n\n' "$desc"
   printf '## Setup\n\n_Setup-Schritte fuer dieses Projekt eintragen._\n'
 }
 
-tpl_project_claude_md() {
+tpl_readme_md_en() {
   local name="$1" desc="$2"
-  cat <<PROJECT_CLAUDE_END
+  printf '# %s\n\n' "$name"
+  [[ -n "$desc" ]] && printf '%s\n\n' "$desc"
+  printf '## Setup\n\n_Enter setup steps for this project._\n'
+}
+
+tpl_project_claude_md() {
+  case "${TATARA_LANG:-en}" in de) tpl_project_claude_md_de "$@" ;; *) tpl_project_claude_md_en "$@" ;; esac
+}
+
+tpl_project_claude_md_de() {
+  local name="$1" desc="$2"
+  cat <<PROJECT_CLAUDE_DE_END
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -1216,7 +1231,61 @@ bd graph --all            # Dependency-Graph
 
 - _Projekt-spezifische Konventionen hier eintragen (Naming, Error-Handling, Testing-Stil)._
 
-PROJECT_CLAUDE_END
+PROJECT_CLAUDE_DE_END
+}
+
+tpl_project_claude_md_en() {
+  local name="$1" desc="$2"
+  cat <<PROJECT_CLAUDE_EN_END
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+${desc:-_One-line project description._}
+
+- **Current state:** _enter_
+- **Stack:** _enter (language, framework, key crates/packages)_
+- **Tests:** _enter (test count, lint status)_
+
+## Language
+
+- Documentation and comments: _English or German_
+- Code and commit messages: _project language_
+- Programming language: _enter_
+
+## Build commands
+
+\`\`\`bash
+# enter build / test / lint commands here, e.g.:
+# cargo build
+# cargo test
+# cargo clippy --workspace --all-targets -- -D warnings
+\`\`\`
+
+## Workflow
+
+Global workflow applies: **~/.claude/software-development-workflow.md** (Architect -> Plan -> QA -> Approval -> Implementation -> QA).
+
+Sub-agents available (global in ~/.claude/agents/): architect, architect-reviewer, developer, qa-reviewer, security-reviewer, test-writer.
+
+## Issue tracking
+
+Local Beads (\`bd\`) in stealth mode, not versioned. Commands:
+
+\`\`\`bash
+bd status                 # database overview
+bd ready                  # issues without active blockers
+bd create "<title>" --type task --priority 2
+bd graph --all            # dependency graph
+\`\`\`
+
+## Conventions
+
+- _Enter project-specific conventions here (naming, error handling, testing style)._
+
+PROJECT_CLAUDE_EN_END
 }
 
 tpl_gitignore() {
@@ -1326,31 +1395,39 @@ HOOK_END
 }
 
 tpl_kickoff_skill() {
-  cat <<'KICKOFF_SKILL_END'
+  cat <<'KICKOFF_SKILL_FRONT'
 ---
-description: Projekt-Kickoff fuer ein frisch von tatara angelegtes Projekt - befragt den User zur Projektidee, erstellt ein technisches Konzept inkl. Groessen- und Aufwandsschaetzung und ueberfuehrt es in den Entwicklungs-Workflow.
+description: Project kickoff for a freshly created tatara project - interviews the user about the project idea, creates a technical concept including size and effort estimate, and transfers it into the development workflow.
 disable-model-invocation: true
 ---
 
-# Projekt-Kickoff
+# Project Kickoff
 
-Dieses Projekt wurde gerade von tatara angelegt (Geruest: git, Beads, CLAUDE.md, Hooks). Fuehre jetzt den Kickoff in vier Schritten:
+KICKOFF_SKILL_FRONT
+  if [[ "${TATARA_LANG:-en}" == de ]]; then
+    printf '%s\n' 'Default conversation language: German (switch if the user writes in another language).'
+  else
+    printf '%s\n' 'Default conversation language: English (switch if the user writes in another language).'
+  fi
+  cat <<'KICKOFF_SKILL_BODY'
 
-## 1. Befragen
-Frage den User nach: Projektidee und Thema, Zielen und Zielgruppe, gewuenschtem Stack bzw. Programmiersprache, Rahmenbedingungen. Stelle Rueckfragen, bis das Bild klar ist.
+This project was just created by tatara (scaffold: git, Beads, CLAUDE.md, hooks). Run the kickoff in four steps:
 
-## 2. Technisches Konzept erstellen
-Erstelle als Architekt ein technisches Konzept: Architektur, Stack, Kernkomponenten, Datenhaltung, Risiken. Folge dem globalen Arbeitsablauf: ~/.claude/software-development-workflow.md (Architekt -> Plan -> QA -> User-Freigabe -> Umsetzung -> QA).
+## 1. Interview
+Ask the user about: project idea and topic, goals and target audience, desired stack or programming language, constraints. Ask follow-up questions until the picture is clear.
 
-## 3. Groesse und Aufwand schaetzen
-Schaetze Projektgroesse und Aufwand (z.B. S/M/L mit Phasen/Meilensteinen) und stimme den Schnitt mit dem User ab.
+## 2. Create a technical concept
+As architect, create a technical concept: architecture, stack, core components, data storage, risks. Follow the global workflow: ~/.claude/software-development-workflow.md (Architect -> Plan -> QA -> User approval -> Implementation -> QA).
 
-## 4. In den Workflow ueberfuehren
-- Konzept in Beads-Issues ueberfuehren: bd create "<Titel>" --type task
-- CLAUDE.md-Platzhalter ausfuellen (Stack, Build-Kommandos, Sprache, Konventionen)
-- Globale Subagenten nutzen: architect, architect-reviewer, developer, qa-reviewer, security-reviewer, test-writer
-- Mit der Umsetzung erst nach User-Freigabe des Konzepts beginnen
-KICKOFF_SKILL_END
+## 3. Estimate size and effort
+Estimate project size and effort (e.g. S/M/L with phases/milestones) and align the scope with the user.
+
+## 4. Transfer into the workflow
+- Transfer concept into Beads issues: bd create "<title>" --type task
+- Fill in CLAUDE.md placeholders (stack, build commands, language, conventions)
+- Use global sub-agents: architect, architect-reviewer, developer, qa-reviewer, security-reviewer, test-writer
+- Start implementation only after the user approves the concept
+KICKOFF_SKILL_BODY
 }
 
 # === BEGIN AUTO-SNAPSHOT TEMPLATES ===

@@ -192,15 +192,18 @@ _path_real_git() {
         || { echo "P4-AK-3: 'bd create' fehlt in SKILL.md. Inhalt:"; cat "$skill_file"; false; }
     grep -q 'architect-reviewer' "$skill_file" \
         || { echo "P4-AK-3: 'architect-reviewer' fehlt in SKILL.md. Inhalt:"; cat "$skill_file"; false; }
-    # Vier Schritt-Marker: Befragen, Konzept, schaetz (Schätzung), ueberfuehr (Workflow)
-    grep -qi 'Befrag' "$skill_file" \
-        || { echo "P4-AK-3: Schritt 'Befragen' (Befrag*) fehlt in SKILL.md. Inhalt:"; cat "$skill_file"; false; }
-    grep -qi 'Konzept' "$skill_file" \
-        || { echo "P4-AK-3: Schritt 'Konzept' fehlt in SKILL.md. Inhalt:"; cat "$skill_file"; false; }
-    grep -qi 'schaetz\|Schätzung\|schätz\|Schaetz' "$skill_file" \
-        || { echo "P4-AK-3: Schritt 'Schaetzung/schätz*' fehlt in SKILL.md. Inhalt:"; cat "$skill_file"; false; }
+    # Vier Schritt-Marker (englisch): Interview, Concept, Estimate, Workflow
+    grep -qi 'Interview' "$skill_file" \
+        || { echo "P4-AK-3: Schritt 'Interview' fehlt in SKILL.md. Inhalt:"; cat "$skill_file"; false; }
+    grep -qi 'Concept' "$skill_file" \
+        || { echo "P4-AK-3: Schritt 'Concept' fehlt in SKILL.md. Inhalt:"; cat "$skill_file"; false; }
+    grep -qi 'Estim' "$skill_file" \
+        || { echo "P4-AK-3: Schritt 'Estimate/Estim*' fehlt in SKILL.md. Inhalt:"; cat "$skill_file"; false; }
     grep -qi 'ueberfuehr\|übergib\|Workflow\|workflow' "$skill_file" \
         || { echo "P4-AK-3: Schritt 'Workflow/ueberfuehr*' fehlt in SKILL.md. Inhalt:"; cat "$skill_file"; false; }
+    # Sprachzeile im Body (unter TATARA_LANG=de aus setup())
+    grep -q 'Default conversation language: German' "$skill_file" \
+        || { echo "P4-AK-3: 'Default conversation language: German' fehlt in SKILL.md (TATARA_LANG=de). Inhalt:"; cat "$skill_file"; false; }
 }
 
 # ==============================================================================
