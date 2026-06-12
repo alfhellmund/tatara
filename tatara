@@ -587,6 +587,7 @@ mode_snapshot_globals() {
 # stdout: Fehlermeldung falls ungueltig; exit 0 = gueltig, exit 1 = ungueltig.
 validate_project_name() {
   local name="$1"
+  local LC_ALL=C   # byte-genauer, locale-unabhaengiger Zeichenklassen-Vergleich (auch Unicode = ungueltig)
   if   [[ -z "$name" ]];               then echo "Projektname darf nicht leer sein"
   elif [[ "$name" == *"/"* ]];         then echo "Projektname darf kein / enthalten"
   elif [[ "$name" == *[[:space:]]* ]]; then echo "Projektname darf keine Leerzeichen enthalten"
@@ -646,8 +647,9 @@ kickoff_handoff() {
   if confirm "Projekt-Kickoff jetzt starten (claude uebernimmt dieses Terminal)?"; then
     log "Starte Kickoff-Session: claude /kickoff"
     cd "$target" || { warn "Wechsel nach $target fehlgeschlagen."; kickoff_instructions "$target"; return 0; }
-    shopt -s execfail 2>/dev/null || true
-    exec claude "/kickoff"
+    shopt -s execfail 2>/dev/null || true  # exec-Fail beendet die Shell NICHT
+    set +e                                 # ... und loest unter set -e keinen Abbruch aus,
+    exec claude "/kickoff"                  #     damit der Fallback erreichbar bleibt
     warn "claude konnte nicht gestartet werden."
     kickoff_instructions "$target"; return 0
   fi

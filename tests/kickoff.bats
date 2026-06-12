@@ -488,9 +488,11 @@ _path_real_git() {
     "
     [ "$status" -eq 0 ] \
         || { echo "P4-AK-10: Exit-Code $status erwartet 0. Output: $output"; false; }
-    # Output muss 'claude auth login' enthalten (aus kickoff_handoff nicht-eingeloggt-Zweig)
-    [[ "$output" == *"claude auth login"* ]] \
-        || { echo "P4-AK-10: 'claude auth login' fehlt im Output (nicht-eingeloggt-Zweig). Output: $output"; false; }
+    # Output muss den KICKOFF-spezifischen nicht-eingeloggt-Hinweis enthalten.
+    # NICHT auf 'claude auth login' allein pruefen — das druckt schon ensure_claude
+    # (Phase 3); 'Erst einloggen:' kommt ausschliesslich aus kickoff_handoff.
+    [[ "$output" == *"Erst einloggen:"* ]] \
+        || { echo "P4-AK-10: kickoff_handoff nicht-eingeloggt-Hinweis ('Erst einloggen:') fehlt im Output. Output: $output"; false; }
     # Anleitung muss '/kickoff' als Text enthalten (kickoff_handoff-spezifisch, NICHT ensure_claude)
     [[ "$output" == *"/kickoff"* ]] \
         || { echo "P4-AK-10: '/kickoff' fehlt im Output (kickoff_handoff-Anleitung im nicht-eingeloggt-Zweig). Output: $output"; false; }
@@ -709,9 +711,10 @@ _path_real_git() {
     # L3-AK-1: validate_project_name muss Shell-Metazeichen ablehnen (RC 1 + Fehlermeldung)
     # und gueltige Namen akzeptieren (RC 0, stdout leer).
     # Ungueltig: a;b, a$(x), a`x`, a&b, a|b, a>b, a*b, a:b, a@b, a"b
+    # sowie Unicode-Buchstaben (LC_ALL=C -> deterministisch ASCII-only): café, über
     # Gueltig: gut-name_1, my.project, Proj2
 
-    local invalid_names=( 'a;b' 'a$(x)' 'a`x`' 'a&b' 'a|b' 'a>b' 'a*b' 'a:b' 'a@b' 'a"b' )
+    local invalid_names=( 'a;b' 'a$(x)' 'a`x`' 'a&b' 'a|b' 'a>b' 'a*b' 'a:b' 'a@b' 'a"b' 'café' 'über' )
     local n
     for n in "${invalid_names[@]}"; do
         run bash -c "
