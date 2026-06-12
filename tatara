@@ -356,6 +356,18 @@ msg_fmt() {
     err_os_unsupported)
       de='tatara unterstuetzt derzeit macOS und Linux. Windows: bitte via WSL ausfuehren.'
       en='tatara currently supports macOS and Linux. Windows: please run via WSL.' ;;
+    ok_git_installed_plain)
+      de='git installiert'
+      en='git installed' ;;
+    ok_bd_installed_plain)
+      de='bd installiert'
+      en='bd installed' ;;
+    info_cli_found)
+      de='%s: gefunden'
+      en='%s: found' ;;
+    info_cli_not_found)
+      de='%s: nicht gefunden'
+      en='%s: not found' ;;
     # === END MESSAGE CATALOG ===
   esac
   if [[ "${TATARA_LANG:-en}" == de ]]; then printf '%s' "$de"; else printf '%s' "$en"; fi
@@ -585,7 +597,7 @@ ensure_git() {
   pkg_install git git git git git
   hash -r 2>/dev/null || true
   command -v git >/dev/null 2>&1 || err "$(msg err_git_not_found)"
-  ok "git installiert"
+  ok "$(msg ok_git_installed_plain)"
 }
 
 # bd: macOS via brew; Linux via brew (falls vorhanden), sonst offizielles
@@ -609,7 +621,7 @@ ensure_bd() {
   hash -r 2>/dev/null || true
   command -v bd >/dev/null 2>&1 \
     || err "$(msg err_bd_not_found)"
-  ok "bd installiert"
+  ok "$(msg ok_bd_installed_plain)"
 }
 
 # claude (Claude Code): Soft-Check — returnt IMMER 0, blockiert/exit-et NIE.
@@ -784,9 +796,9 @@ mode_check() {
   local cli
   for cli in "${AI_CLIS[@]}"; do
     if command -v "$cli" >/dev/null 2>&1; then
-      info "$cli: gefunden"
+      info "$(msg info_cli_found "$cli")"
     else
-      info "$cli: nicht gefunden"
+      info "$(msg info_cli_not_found "$cli")"
     fi
   done
 
