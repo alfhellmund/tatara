@@ -419,7 +419,8 @@ NUTZUNG
   tatara                         Ohne Argumente: startet bei interaktivem Terminal
                                       einen Assistenten (Projektname, Beschreibung),
                                       sonst diese Hilfe
-  tatara <NAME> [BESCHREIBUNG]   Neues Projekt unter $PROJECTS_ROOT/<NAME> anlegen
+  tatara <NAME> [BESCHREIBUNG]   Neues Projekt unter ~/Development/<NAME> anlegen
+                                      (Basis via PROJECTS_ROOT, s. UMGEBUNGSVARIABLEN)
   tatara --check                 Globale Voraussetzungen + optionale KI-CLIs pruefen
   tatara --bootstrap-globals     Fehlende globale ~/.claude/* Dateien anlegen
   tatara --snapshot-globals      Aktuelle ~/.claude/* Dateien als Templates ins
@@ -477,7 +478,8 @@ USAGE
   tatara                         No arguments: on an interactive terminal starts
                                       an assistant (project name, description),
                                       otherwise shows this help
-  tatara <NAME> [DESCRIPTION]    Create a new project under $PROJECTS_ROOT/<NAME>
+  tatara <NAME> [DESCRIPTION]    Create a new project under ~/Development/<NAME>
+                                      (base via PROJECTS_ROOT, see ENVIRONMENT VARIABLES)
   tatara --check                 Check global prerequisites + optional AI CLIs
   tatara --bootstrap-globals     Create missing global ~/.claude/* files
   tatara --snapshot-globals      Write the current ~/.claude/* files back into the
@@ -711,9 +713,9 @@ fable_available() {
     return 1
   fi
 
-  # Unter CLAUDECODE (direkte Ausfuehrung) laeuft tatara bereits in einer Claude-Session —
-  # verschachtelter -p-Call ist unerwuenscht. Konservativ: opus verwenden.
-  if [[ -n "${CLAUDECODE:-}" && -n "${_TATARA_DIRECT_EXEC:-}" ]]; then
+  # Laeuft tatara in einer Claude-Session (CLAUDECODE), ist ein verschachtelter
+  # -p-Call unerwuenscht. Konservativ: opus verwenden, ohne Probe.
+  if [[ -n "${CLAUDECODE:-}" ]]; then
     echo "nested-session"
     return 1
   fi
@@ -978,7 +980,15 @@ mode_snapshot_globals() {
   if command -v realpath >/dev/null 2>&1; then
     script="$(realpath "${BASH_SOURCE[0]}")"
   else
-    script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+    # Fallback (z.B. macOS < 13 ohne realpath): Symlinks iterativ aufloesen
+    # (readlink ohne -f folgt nur eine Ebene; relative Ziele am Verzeichnis aufloesen)
+    local src="${BASH_SOURCE[0]}" dir
+    while [[ -L "$src" ]]; do
+      dir="$(cd "$(dirname "$src")" && pwd)"
+      src="$(readlink "$src")"
+      [[ "$src" != /* ]] && src="$dir/$src"
+    done
+    script="$(cd "$(dirname "$src")" && pwd)/$(basename "$src")"
   fi
   [[ -z "$script" || ! -f "$script" ]] \
     && err "$(msg err_snapshot_no_script_path)"
@@ -1042,8 +1052,8 @@ mode_snapshot_globals() {
   ' "$script" > "$tmpscript"
 
   # Validierung: Marker vorhanden + bash-Syntax-Check
-  if ! grep -q "BEGIN AUTO-SNAPSHOT TEMPLATES" "$tmpscript" \
-     || ! grep -q "END AUTO-SNAPSHOT TEMPLATES" "$tmpscript"; then
+  if ! grep -qx '# === BEGIN AUTO-SNAPSHOT TEMPLATES ===' "$tmpscript" \
+     || ! grep -qx '# === END AUTO-SNAPSHOT TEMPLATES ===' "$tmpscript"; then
     rm -f "$tmpblock" "$tmpscript"
     err "$(msg err_snapshot_validation_failed)"
   fi
@@ -1164,7 +1174,7 @@ mode_tatara() {
   fi
 
   # git-Identity-Preflight: git commit wuerde spaeter scheitern ohne user.name/user.email.
-  if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
+  if [[ -z "$(git config user.email 2>/dev/null)" || -z "$(git config user.name 2>/dev/null)" ]]; then
     err "$(msg err_git_no_identity)"
   fi
 
@@ -2480,4 +2490,4 @@ case "${TATARA_INTERACTIVE:-}" in
   *) warn "$(msg warn_invalid_interactive "${TATARA_INTERACTIVE}")" ;;
 esac
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then _TATARA_DIRECT_EXEC=1; main "$@"; fi
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

@@ -5,6 +5,14 @@ case "${1:-}" in
     --version)
         printf '%s\n' "git version 99.0.0-stub"
         ;;
+    config)
+        # Identity simulieren (echtes git mit konfigurierter user.name/email),
+        # damit der git-Identity-Preflight in mode_tatara durchlaeuft
+        case "${2:-}" in
+            user.email) printf '%s\n' "stub@example.com" ;;
+            user.name)  printf '%s\n' "Stub User" ;;
+        esac
+        ;;
     init|add|commit)
         # Schweigend erfolgreich
         ;;

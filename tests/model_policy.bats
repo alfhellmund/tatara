@@ -17,6 +17,7 @@ STUBS_DIR="/Users/alfhellmund/Development/tatara/tests/stubs"
 
 setup() {
     export TATARA_LANG=de   # Phase 5: Bestandstests deterministisch deutsch (locale-unabhaengig)
+    unset CLAUDECODE        # fable-Probe isoliert testen (nicht aus der Claude-Session erben)
     # Isoliertes HOME fuer jeden Test
     HOME="$BATS_TEST_TMPDIR/home"
     mkdir -p "$HOME"

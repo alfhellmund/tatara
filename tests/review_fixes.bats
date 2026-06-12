@@ -213,9 +213,11 @@ _path_real_git() {
     [ "$found_collision_hint" -eq 1 ] \
         || { echo "FIX-M3: Fehlermeldung nennt weder 'AGENT_END' noch Dateiname noch 'Kollision'/'collision'. Output: $output"; false; }
 
-    # Kopie muss bash -n-sauber geblieben sein (kein korruptes Skript geschrieben)
-    bash -n "$tatara_copy" \
-        || { echo "FIX-M3: tatara_copy ist nach fehlgeschlagenem --snapshot-globals bash -n-unsauber — korruptes Skript wurde dennoch geschrieben!"; false; }
+    # Kopie muss BYTE-IDENTISCH zum Original geblieben sein — der Guard bricht VOR
+    # jeder Schreiboperation ab, also darf gar nichts (auch nichts Teilweises/Korruptes)
+    # geschrieben worden sein. Staerker als 'bash -n' (Markdown ist gueltiges Bash).
+    cmp -s "${TATARA}" "$tatara_copy" \
+        || { echo "FIX-M3: tatara_copy wurde veraendert trotz Kollisions-Abbruch — der Guard greift nicht VOR dem Schreiben!"; false; }
 }
 
 # ==============================================================================
