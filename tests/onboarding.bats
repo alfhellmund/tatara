@@ -49,12 +49,13 @@ _setup_full_globals() {
 
 # PATH ohne git: filtert Verzeichnisse mit git-Binary heraus; stellt
 # uname-Stub bereit falls das echte uname-Verzeichnis dabei entfaellt.
-# bd + claude-Stubs bleiben erhalten.
+# bd + claude + curl-Stubs bleiben erhalten (M-3: Haertung gegen echtes curl).
 _path_no_git() {
     local nodir="$BATS_TEST_TMPDIR/nogit_$$"
     mkdir -p "$nodir"
     cp "$STUBS_DIR/bd"     "$nodir/bd"
     cp "$STUBS_DIR/claude" "$nodir/claude"
+    cp "$STUBS_DIR/curl"   "$nodir/curl"
     # uname-Stub: gibt Darwin zurueck (reicht fuer OS-Detection)
     printf '%s\n' '#!/usr/bin/env bash' 'printf "Darwin\n"' > "$nodir/uname"
     chmod +x "$nodir/uname"
@@ -295,9 +296,10 @@ _path_no_git() {
 # P2-AK-7 — Selbst-Heilung partiell: nur developer.md fehlt, architect.md unveraendert
 # ==============================================================================
 
-@test "P2-AK-7: Selbst-Heilung partiell: developer.md fehlt -> wird angelegt mit 'model: sonnet'; architect.md byte-identisch; kein claude-Call" {
+@test "P2-AK-7: Selbst-Heilung partiell: developer.md fehlt -> wird angelegt mit 'model: sonnet'; architect.md byte-identisch; kein -p-Call" {
     # P2-AK-7: alle Globals vorhanden ausser developer.md, ENV ungesetzt ->
-    # Exit 0; developer.md mit 'model: sonnet'; architect.md byte-identisch (cmp); kein claude-Call
+    # Exit 0; developer.md mit 'model: sonnet'; architect.md byte-identisch (cmp); kein -p-Call.
+    # CLAUDE_STUB_LOGGED_IN=1: Profi=eingeloggt=still (Phase-3: ensure_claude erzeugt sonst Login-Warnung).
     local claude_dir="${BATS_TEST_TMPDIR}/home/.claude"
     local agents_dir="${claude_dir}/agents"
     mkdir -p "$agents_dir"
@@ -325,7 +327,9 @@ _path_no_git() {
         export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
         export PATH='${STUB_PATH}'
         export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CLAUDE_STUB_LOGGED_IN=1
         unset TATARA_ARCHITECT_MODEL
+        unset CLAUDECODE
         bash '${TATARA}' proj </dev/null 2>&1
     "
     [ "$status" -eq 0 ] \
@@ -338,11 +342,13 @@ _path_no_git() {
     # architect.md byte-identisch (wurde NICHT ueberschrieben)
     cmp "${agents_dir}/architect.md" "$snapshot_file" \
         || { echo "P2-AK-7: architect.md wurde modifiziert, byte-identisch erwartet:"; diff "$snapshot_file" "${agents_dir}/architect.md"; false; }
-    # Kein claude-Call
-    if [[ -f "$CLAUDE_STUB_LOG" ]] && [[ -s "$CLAUDE_STUB_LOG" ]]; then
-        echo "P2-AK-7: Stub-Log enthaelt Eintraege obwohl kein claude-Call erlaubt:"
-        cat "$CLAUDE_STUB_LOG"
-        false
+    # Kein -p-Call (Lockerung: Log darf existieren z.B. fuer auth status, aber kein -p)
+    if [[ -f "$CLAUDE_STUB_LOG" ]]; then
+        if grep -Eq '(^|[[:space:]"])-p([[:space:]"]|$)' "$CLAUDE_STUB_LOG" 2>/dev/null; then
+            echo "P2-AK-7: Stub-Log enthaelt -p-Call obwohl kein Probe erlaubt:"
+            cat "$CLAUDE_STUB_LOG"
+            false
+        fi
     fi
 }
 
@@ -350,16 +356,19 @@ _path_no_git() {
 # P2-AK-8 — Profi-No-op: vollstaendige Globals -> stiller Durchlauf
 # ==============================================================================
 
-@test "P2-AK-8: Vollstaendige Globals -> kein 'geschrieben:', kein 'behalten:', kein 'bootstrappe', kein claude-Call" {
+@test "P2-AK-8: Vollstaendige Globals -> kein 'geschrieben:', kein 'behalten:', kein 'bootstrappe', kein -p-Call" {
     # P2-AK-8: vollstaendige Dummy-Globals -> Exit 0;
     # Output enthaelt weder 'geschrieben:' noch 'behalten:' noch 'bootstrappe';
-    # CLAUDE_STUB_LOG leer
+    # CLAUDE_STUB_LOG enthaelt keinen -p-Call (Lockerung: auth-status-Call fuer ensure_claude ist ok).
+    # CLAUDE_STUB_LOGGED_IN=1: Profi=eingeloggt=still (Phase-3: ensure_claude erzeugt sonst Login-Warnung).
     _setup_full_globals
     run bash -c "
         export HOME='${BATS_TEST_TMPDIR}/home'
         export PROJECTS_ROOT='${BATS_TEST_TMPDIR}/dev'
         export PATH='${STUB_PATH}'
         export CLAUDE_STUB_LOG='${CLAUDE_STUB_LOG}'
+        export CLAUDE_STUB_LOGGED_IN=1
+        unset CLAUDECODE
         bash '${TATARA}' proj </dev/null 2>&1
     "
     [ "$status" -eq 0 ] \
@@ -370,10 +379,13 @@ _path_no_git() {
         || { echo "P2-AK-8: 'behalten:' in Output obwohl No-op erwartet. Output: $output"; false; }
     [[ "$output" != *"bootstrappe"* ]] \
         || { echo "P2-AK-8: 'bootstrappe' in Output obwohl No-op erwartet. Output: $output"; false; }
-    if [[ -f "$CLAUDE_STUB_LOG" ]] && [[ -s "$CLAUDE_STUB_LOG" ]]; then
-        echo "P2-AK-8: Stub-Log enthaelt Eintraege obwohl kein claude-Call erlaubt:"
-        cat "$CLAUDE_STUB_LOG"
-        false
+    # Kein -p-Call (Lockerung: Log darf existieren z.B. fuer auth status, aber kein -p)
+    if [[ -f "$CLAUDE_STUB_LOG" ]]; then
+        if grep -Eq '(^|[[:space:]"])-p([[:space:]"]|$)' "$CLAUDE_STUB_LOG" 2>/dev/null; then
+            echo "P2-AK-8: Stub-Log enthaelt -p-Call obwohl kein Probe erlaubt:"
+            cat "$CLAUDE_STUB_LOG"
+            false
+        fi
     fi
 }
 

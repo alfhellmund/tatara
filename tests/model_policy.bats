@@ -29,12 +29,13 @@ setup() {
     STUB_PATH="${STUBS_DIR}:${PATH}"
 }
 
-# Hilfsfunktion: PATH ohne claude-Stub, aber mit git + bd
+# Hilfsfunktion: PATH ohne claude-Stub, aber mit git + bd + curl (M-3: Haertung).
 _path_no_claude() {
     local nodir="$BATS_TEST_TMPDIR/nostubs_$$"
     mkdir -p "$nodir"
-    cp "$STUBS_DIR/git" "$nodir/git"
-    cp "$STUBS_DIR/bd"  "$nodir/bd"
+    cp "$STUBS_DIR/git"  "$nodir/git"
+    cp "$STUBS_DIR/bd"   "$nodir/bd"
+    cp "$STUBS_DIR/curl" "$nodir/curl"
     # System-PATH beibehalten (coreutils: grep/awk/jq), aber jedes Verzeichnis
     # mit echter claude-Binary herausfiltern — sonst findet command -v claude
     # die System-Installation und der no-claude-Pfad ist nicht testbar.
@@ -580,11 +581,13 @@ _setup_full_globals() {
     grep -q '^model: sonnet' "${agents_dir}/developer.md" \
         || { echo "AK-10: developer.md enthaelt nicht 'model: sonnet'. Inhalt:"; grep '^model:' "${agents_dir}/developer.md" 2>/dev/null || echo "(kein model:-Feld)"; false; }
 
-    # Kein claude-Call: Stub-Log darf nicht existieren oder leer sein
-    if [[ -f "$CLAUDE_STUB_LOG" ]] && [[ -s "$CLAUDE_STUB_LOG" ]]; then
-        echo "AK-10: Stub-Log enthaelt Eintraege obwohl kein claude-Call erlaubt:"
-        cat "$CLAUDE_STUB_LOG"
-        false
+    # Kein -p-Call (Lockerung: Log darf existieren z.B. fuer auth status, aber kein -p)
+    if [[ -f "$CLAUDE_STUB_LOG" ]]; then
+        if grep -Eq '(^|[[:space:]"])-p([[:space:]"]|$)' "$CLAUDE_STUB_LOG" 2>/dev/null; then
+            echo "AK-10: Stub-Log enthaelt -p-Call obwohl kein Probe erlaubt:"
+            cat "$CLAUDE_STUB_LOG"
+            false
+        fi
     fi
 }
 

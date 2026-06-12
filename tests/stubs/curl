@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# curl-Stub fuer tatara-Tests.
+# Verhindert jeden echten Netzwerk-Zugriff und simuliert curl|bash-Installationen.
+#
+# Env-Variablen:
+#   CURL_STUB_LOG          Pfad zum Log; jeder Aufruf wird als eine Zeile angehaengt.
+#   CURL_STUB_MODE=ok      (Default) Simuliert erfolgreichen Download: gibt ein
+#                          Mini-Installer-Skript auf stdout aus, das
+#                              cp "$CURL_STUB_INSTALL_SRC" "$CURL_STUB_INSTALL_DST"
+#                              chmod +x "$CURL_STUB_INSTALL_DST"
+#                          ausfuehrt, wenn es via "bash" ausgefuehrt wird.
+#   CURL_STUB_MODE=fail    Simuliert Netzwerkfehler: keine Ausgabe, Exit 22.
+#   CURL_STUB_INSTALL_SRC  Quelldatei fuer die simulierte Installation
+#                          (Default: tests/stubs/claude).
+#   CURL_STUB_INSTALL_DST  Zieldatei fuer die simulierte Installation
+#                          (Default: /dev/null — kein tatsaechliches Installieren).
+
+# Alle Argumente loggen (eine Zeile pro Aufruf)
+if [[ -n "${CURL_STUB_LOG:-}" ]]; then
+    printf '%s\n' "$*" >> "$CURL_STUB_LOG"
+fi
+
+case "${CURL_STUB_MODE:-ok}" in
+    ok)
+        # Gibt ein Mini-Installer-Skript auf stdout aus.
+        # Wenn dieses Skript via "curl ... | bash" ausgefuehrt wird, kopiert es
+        # CURL_STUB_INSTALL_SRC nach CURL_STUB_INSTALL_DST und macht es ausfuehrbar.
+        printf '%s\n' "#!/usr/bin/env bash"
+        printf '%s\n' "set -e"
+        printf '%s\n' "_src=\"\${CURL_STUB_INSTALL_SRC:-}\""
+        printf '%s\n' "_dst=\"\${CURL_STUB_INSTALL_DST:-}\""
+        printf '%s\n' "if [[ -n \"\$_src\" && -n \"\$_dst\" ]]; then"
+        printf '%s\n' "  cp \"\$_src\" \"\$_dst\""
+        printf '%s\n' "  chmod +x \"\$_dst\""
+        printf '%s\n' "fi"
+        exit 0
+        ;;
+    fail)
+        # Simuliert Netzwerkfehler (curl Exit-Code 22 = HTTP error)
+        exit 22
+        ;;
+    *)
+        printf '%s\n' "curl-stub: unbekannter CURL_STUB_MODE='${CURL_STUB_MODE}'" >&2
+        exit 1
+        ;;
+esac
