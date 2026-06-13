@@ -445,6 +445,8 @@ GLOBALE VORAUSSETZUNGEN (geprueft vor jedem Setup)
                                        Linux: apt / dnf / pacman / zypper (oder brew)
   git, bd                              fehlen sie, bietet tatara die Installation an
                                        (bd auf Linux via brew oder offizielles Skript)
+  git-Identitaet                       user.name + user.email muessen gesetzt sein
+                                       (git config --global ...), sonst Abbruch
   claude (Claude Code)                 empfohlen; Login: claude auth login
                                        (Soft-Check — tatara laeuft ohne claude)
   ~/.claude/CLAUDE.md                  Globale Workflow-Regeln
@@ -504,6 +506,8 @@ GLOBAL PREREQUISITES (checked before every setup)
                                        Linux: apt / dnf / pacman / zypper (or brew)
   git, bd                              if missing, tatara offers to install them
                                        (bd on Linux via brew or official script)
+  git identity                         user.name + user.email must be set
+                                       (git config --global ...), or it aborts
   claude (Claude Code)                 recommended; login: claude auth login
                                        (soft check — tatara runs without claude)
   ~/.claude/CLAUDE.md                  Global workflow rules

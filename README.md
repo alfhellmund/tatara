@@ -97,6 +97,10 @@ prompt) via Homebrew (macOS) or `apt` / `dnf` / `pacman` / `zypper` (Linux); on
 Linux without Homebrew, `bd` uses the official Beads install script. The only
 prerequisite you install yourself is a package manager (macOS: Homebrew).
 
+git needs a configured identity — set `git config --global user.name "..."` and
+`git config --global user.email "..."` once; without it tatara stops before
+creating the project (the initial commit would otherwise fail).
+
 Claude Code is the intended environment: if `claude` is missing, tatara offers
 to install it; logging in stays manual (`claude auth login`, browser OAuth).
 `tatara --check` reports the status of `claude` plus the optional CLIs `gemini`
@@ -190,6 +194,11 @@ unterstützt (kein nativer Port). Fehlende Tools `git` und `bd` werden bei Bedar
 `pacman` / `zypper` (Linux); auf Linux ohne Homebrew zieht `bd` das offizielle
 Beads-Install-Skript. Einzige selbst zu installierende Voraussetzung ist ein
 Paketmanager (macOS: Homebrew).
+
+git braucht eine konfigurierte Identität — einmalig `git config --global
+user.name "..."` und `git config --global user.email "..."` setzen; ohne sie
+bricht tatara vor dem Anlegen des Projekts ab (der Initial-Commit würde sonst
+scheitern).
 
 Claude Code ist die vorgesehene Umgebung: fehlt `claude`, bietet tatara die
 Installation an; der Login bleibt manuell (`claude auth login`, Browser-OAuth).
