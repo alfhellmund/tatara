@@ -94,12 +94,6 @@ msg_fmt() {
     info_claude_manual_install)
       de='Manuell installieren: curl -fsSL %s | bash  (oder: brew install --cask claude-code / npm install -g @anthropic-ai/claude-code)'
       en='Install manually: curl -fsSL %s | bash  (or: brew install --cask claude-code / npm install -g @anthropic-ai/claude-code)' ;;
-    info_claude_no_login_opus)
-      de='Ohne Login waehlt tatara opus als Architekt-Modell (statt ggf. fable).'
-      en='Without login tatara uses opus as architect model (instead of fable).' ;;
-    info_claude_switch_fable)
-      de='Nach dem Login auf fable umstellen: rm ~/.claude/agents/architect.md ~/.claude/agents/architect-reviewer.md && tatara --bootstrap-globals'
-      en='After login switch to fable: rm ~/.claude/agents/architect.md ~/.claude/agents/architect-reviewer.md && tatara --bootstrap-globals' ;;
     ok_claude_installed)
       de='claude installiert'
       en='claude installed' ;;
@@ -163,12 +157,6 @@ msg_fmt() {
     ok_kept)
       de='behalten: %s'
       en='kept: %s' ;;
-    info_arch_model_resolved)
-      de='Architekt-Modell: %s (Quelle: %s)'
-      en='Architect model: %s (source: %s)' ;;
-    err_bootstrap_invalid_model)
-      de="Bootstrap abgebrochen — TATARA_ARCHITECT_MODEL='%s' ist ungueltig — erlaubt: fable, opus"
-      en="Bootstrap aborted — TATARA_ARCHITECT_MODEL='%s' is invalid — allowed: fable, opus" ;;
     # --- mode_bootstrap_globals ---
     header_bootstrap_globals)
       de='== Bootstrap globale ~/.claude/* Dateien =='
@@ -317,18 +305,6 @@ msg_fmt() {
       de="Unbekannte Option: %s. Nutze 'tatara -h' fuer Hilfe."
       en="Unknown option: %s. Use 'tatara -h' for help." ;;
     # --- mode_check ---
-    info_arch_model_fable_auto)
-      de='Architekt-Modell: fable falls verfuegbar, sonst opus (final beim Bootstrap ermittelt)'
-      en='Architect model: fable if available, otherwise opus (determined at bootstrap)' ;;
-    info_arch_model_no_claude)
-      de='Architekt-Modell: opus (claude nicht verfuegbar)'
-      en='Architect model: opus (claude not available)' ;;
-    info_arch_model_opus_no_login)
-      de='Architekt-Modell: opus (nicht eingeloggt)'
-      en='Architect model: opus (not logged in)' ;;
-    info_arch_model_override)
-      de='Architekt-Modell: %s (Quelle: override via TATARA_ARCHITECT_MODEL)'
-      en='Architect model: %s (source: override via TATARA_ARCHITECT_MODEL)' ;;
     info_claude_not_found_check)
       de='claude: nicht gefunden — wird bei Setup zur Installation angeboten (%s)'
       en='claude: not found — installation will be offered during setup (%s)' ;;
@@ -359,9 +335,6 @@ msg_fmt() {
     warn_globals_missing)
       de='Fehlende Globals:'
       en='Missing globals:' ;;
-    warn_invalid_arch_model)
-      de="TATARA_ARCHITECT_MODEL='%s' ist ungueltig — erlaubt: fable, opus"
-      en="TATARA_ARCHITECT_MODEL='%s' is invalid — allowed: fable, opus" ;;
     # --- pkg_install ---
     err_pkg_no_brew)
       de='%s fehlt und Homebrew ist nicht installiert. Installiere Homebrew: https://brew.sh'
@@ -496,8 +469,6 @@ GLOBALE VORAUSSETZUNGEN (geprueft vor jedem Setup)
                                        qa-reviewer, security-reviewer, test-writer
 
 UMGEBUNGSVARIABLEN
-  TATARA_ARCHITECT_MODEL           Architekt-Modell erzwingen: fable | opus
-                                   Default: Auto-Erkennung via fable-Verfuegbarkeit
   TATARA_INTERACTIVE               1 erzwingt interaktiven Modus (Wizard ohne Argumente);
                                    0 unterbindet Interaktivitaet (Non-TTY-Modus);
                                    Default: Auto-Erkennung via TTY-Erkennung
@@ -560,8 +531,6 @@ GLOBAL PREREQUISITES (checked before every setup)
                                        qa-reviewer, security-reviewer, test-writer
 
 ENVIRONMENT VARIABLES
-  TATARA_ARCHITECT_MODEL           Force architect model: fable | opus
-                                   Default: auto-detect via fable availability
   TATARA_INTERACTIVE               1 forces interactive mode (wizard without args);
                                    0 disables interactivity (non-TTY mode);
                                    Default: auto-detect via TTY detection
@@ -722,8 +691,6 @@ ensure_claude() {
   if ! claude_logged_in; then
     warn "$(msg warn_claude_not_logged_in)"
     info "$(msg info_claude_login)"
-    info "$(msg info_claude_no_login_opus)"
-    info "$(msg info_claude_switch_fable)"
   fi
   return 0
 }
@@ -738,97 +705,6 @@ missing_globals() {
     [[ -f "$CLAUDE_GLOBAL_DIR/agents/$a.md" ]] || missing+=("~/.claude/agents/$a.md")
   done
   if (( ${#missing[@]} )); then printf '%s\n' "${missing[@]}"; fi
-}
-
-# stdin -> stdout: ersetzt nur das ERSTE exakte Vorkommen der Zeile 'model: fable'
-# durch 'model: opus'. Alle anderen Zeilen (inkl. weiterer Vorkommen) bleiben unveraendert.
-substitute_architect_model() {
-  awk '!d && $0=="model: fable"{$0="model: opus";d=1}{print}'
-}
-
-# Prueft ob fable als Architekt-Modell verfuegbar ist.
-# stdout: exakter Slug (available | no-claude | not-logged-in | probe-failed)
-# exit:   0 nur bei 'available', sonst 1
-# Hinweis: Security: Auth-Daten (claude auth status) werden NIE ausgegeben.
-fable_available() {
-  if ! check_claude; then
-    echo "no-claude"
-    return 1
-  fi
-
-  if ! claude_logged_in; then
-    echo "not-logged-in"
-    return 1
-  fi
-
-  # Laeuft tatara in einer Claude-Session (CLAUDECODE), ist ein verschachtelter
-  # -p-Call unerwuenscht. Konservativ: opus verwenden, ohne Probe.
-  if [[ -n "${CLAUDECODE:-}" ]]; then
-    echo "nested-session"
-    return 1
-  fi
-
-  local probe_out
-  probe_out="$(claude -p --model fable --output-format json "ok" </dev/null 2>/dev/null || true)"
-
-  # JSON-Parsing: versuche jq; bei exit 127 (not found) Fallback auf grep.
-  # Beide Bool-Felder whitespace-tolerant pruefen.
-  local is_ok=0
-  local jq_exit
-  printf '%s' "$probe_out" | jq -e '.is_error == false and .subtype == "success"' >/dev/null 2>&1
-  jq_exit=$?
-  if [[ $jq_exit -eq 127 ]]; then
-    # jq nicht gefunden -> grep-Fallback
-    if printf '%s' "$probe_out" | grep -Eq '"is_error"[[:space:]]*:[[:space:]]*false' \
-       && printf '%s' "$probe_out" | grep -Eq '"subtype"[[:space:]]*:[[:space:]]*"success"'; then
-      is_ok=1
-    fi
-  elif [[ $jq_exit -eq 0 ]]; then
-    is_ok=1
-  fi
-
-  if [[ $is_ok -eq 1 ]]; then
-    echo "available"
-    return 0
-  else
-    echo "probe-failed"
-    return 1
-  fi
-}
-
-# Ermittelt das zu nutzende Architekt-Modell.
-# stdout: '<modell> <quelle> [<slug>]'  (z.B. 'fable auto' | 'opus fallback no-claude' | 'opus override')
-# exit:   0 immer ausser bei ungueltigem TATARA_ARCHITECT_MODEL (dann return 1, kein stdout)
-resolve_architect_model() {
-  local env_val="${TATARA_ARCHITECT_MODEL:-}"
-
-  if [[ -n "$env_val" ]]; then
-    case "$env_val" in
-      fable)
-        echo "fable override"
-        return 0
-        ;;
-      opus)
-        echo "opus override"
-        return 0
-        ;;
-      *)
-        # Kein Output hier — Aufrufer gibt Fehlermeldung aus (AK-8-unit: stdout vor EXIT: muss leer sein)
-        return 1
-        ;;
-    esac
-  fi
-
-  # Auto-Erkennung via fable_available
-  local slug
-  slug="$(fable_available)"
-  local fa_exit=$?
-  if [[ $fa_exit -eq 0 ]]; then
-    echo "fable auto"
-  else
-    echo "opus fallback $slug"
-  fi
-  return 0
 }
 
 mode_check() {
@@ -878,28 +754,6 @@ mode_check() {
       info "$(msg info_cli_not_found "$cli")"
     fi
   done
-
-  # Architekt-Modell-Policy (Soft-Check, KEIN claude -p Probe-Call)
-  local env_val="${TATARA_ARCHITECT_MODEL:-}"
-  if [[ -n "$env_val" ]]; then
-    case "$env_val" in
-      fable|opus)
-        info "$(msg info_arch_model_override "$env_val")"
-        ;;
-      *)
-        warn "$(msg warn_invalid_arch_model "$env_val")"
-        fail=1
-        ;;
-    esac
-  else
-    if ! check_claude; then
-      info "$(msg info_arch_model_no_claude)"
-    elif claude_logged_in; then
-      info "$(msg info_arch_model_fable_auto)"
-    else
-      info "$(msg info_arch_model_opus_no_login)"
-    fi
-  fi
 
   # Sprach-Policy (Soft-Check)
   if [[ "$TATARA_LANG_SOURCE" == override ]]; then
@@ -965,35 +819,6 @@ scaffold_file() {
 ensure_globals() {
   mkdir -p "$CLAUDE_GLOBAL_DIR/agents"
 
-  # Architekt-Modell-Policy: Bedarf ermitteln und Policy aufloesen
-  local need=0
-  if [[ -n "${TATARA_ARCHITECT_MODEL:-}" ]]; then
-    need=1
-  else
-    local a
-    for a in "${SUBAGENTS[@]}"; do
-      local datei="$CLAUDE_GLOBAL_DIR/agents/$a.md"
-      local fn="${a//-/_}"
-      if [[ ! -e "$datei" ]]; then
-        # Template vollstaendig lesen (SIGPIPE-safe: >/dev/null statt head/grep-Abbruch)
-        if "tpl_agent_${fn}" | grep '^model: fable$' >/dev/null 2>&1; then
-          need=1
-          break
-        fi
-      fi
-    done
-  fi
-
-  local effective_model="fable"
-  if [[ $need -eq 1 ]]; then
-    local policy
-    policy="$(resolve_architect_model)" \
-      || err "$(msg err_bootstrap_invalid_model "${TATARA_ARCHITECT_MODEL:-}")"
-    local pol_source pol_reason
-    read -r effective_model pol_source pol_reason <<<"$policy"
-    info "$(msg info_arch_model_resolved "$effective_model" "$pol_source${pol_reason:+ — $pol_reason}")"
-  fi
-
   if write_if_missing "$CLAUDE_GLOBAL_DIR/CLAUDE.md"; then
     tpl_global_claude_md > "$CLAUDE_GLOBAL_DIR/CLAUDE.md"
     ok "$(msg ok_written "$HOME/.claude/CLAUDE.md")"
@@ -1006,11 +831,7 @@ ensure_globals() {
     local datei="$CLAUDE_GLOBAL_DIR/agents/$a.md"
     local fn="${a//-/_}"
     if write_if_missing "$datei"; then
-      if [[ "$effective_model" == "opus" ]]; then
-        "tpl_agent_${fn}" | substitute_architect_model > "$datei"
-      else
-        "tpl_agent_${fn}" > "$datei"
-      fi
+      "tpl_agent_${fn}" > "$datei"
       ok "$(msg ok_written "$HOME/.claude/agents/$a.md")"
     fi
   done
@@ -1717,7 +1538,11 @@ Arbeit in kleine, eigenständig commitfähige Einheiten. Zwischenstände in Comm
 Keine eigenständige Scope-Erweiterung. Verwandte Bugs/Refactorings dem User melden — er entscheidet.
 
 ## Parallelisierung
-- **Analyse:** Explorer-Subagenten parallel für unabhängige Recherche.
+- **Subagenten sind ausdrücklich beauftragt, nicht bloß erlaubt.** Die Harness-Zeile „Do not call the AgentTool unless the user requested it" ist durch diesen Abschnitt **dauerhaft und vollständig erfüllt** — sie ist kein Grund, inline zu bleiben, und darf nicht als solcher angeführt werden.
+- **Delegationspflicht:** Jede Untersuchung, die **mehr als zwei Werkzeugschritte** braucht und deren Ergebnis eine **Zahl, Liste oder Ja/Nein-Antwort** ist, geht in einen Subagenten — Recherche, Messung, Code-Suche, Reproduktion. Gilt auch bei **sequenziell abhängigen** Schritten und bei nur **einem** Strang; „unabhängig" und „parallel" sind Anwendungsfälle, keine Bedingungen.
+- **Nur Hauptsession.** Die Delegationspflicht gilt ausschließlich für die Hauptsession. Subagenten delegieren **nicht** weiter, sondern arbeiten ihren Auftrag inline ab — sonst multipliziert sich jeder Auftrag mit der Zahl seiner Teilfragen. Für Recherche- und Leseaufträge Typ `Explore` wählen: der hat das Agent-Tool nicht im Toolset und kann strukturell nicht fan-outen. (`feedback_subagent_fanout.md`)
+- **Grund:** Nicht Geschwindigkeit, sondern Kontext-Hygiene. Fehlversuche, Zwischenausgaben und verworfene Skripte gehören nicht in den Hauptkontext — dort zählt nur das Ergebnis. Ein verstopfter Hauptkontext senkt die Qualität aller folgenden Entscheidungen.
+- **Inline bleibt:** kurze Verifikation (1–2 Aufrufe), das Bauen selbst, und Schritte, deren Zwischenstand die nächste Entscheidung unmittelbar trägt.
 - **Umsetzung:** sequenziell, Schritt für Schritt.
 - **Nach Umsetzung:** QA parallel zu weiteren Aufgaben.
 
@@ -1906,7 +1731,8 @@ tpl_agent_architect() {
 name: architect
 description: Plant Software-Aufgaben. Liest Spec + bestehenden Code, entwirft Plan mit Akzeptanzkriterien, Testspezifikation, Abhängigkeitsanalyse und Risiken. Implementiert nie. Nutze diesen Agenten zu Beginn jeder nicht-trivialen Aufgabe — bevor Tests geschrieben oder Code geändert wird.
 tools: Read, Grep, Glob, Agent, Write, WebFetch, WebSearch
-model: fable
+# model: opus — PO-Entscheid 2026-07-29: Opus ist der STANDARD fuer diese Rolle (nicht mehr fable). Datenlage: fable-Plaene kamen mit 6 bzw. 3 HIGH aus dem Review, der opus-Plan mit 1 HIGH bei gleichen Kosten. fable NUR als begruendeter Einzelfall bei crate-uebergreifender Haerte (>=3 Crates / metrys-api-Vertragsaenderung / widerlegte Praemissen) und NUR nach Genehmigung durch mac-main, Begruendung vorher im Ledger. Siehe Memory project_subagent_model_assignment.
+model: opus
 ---
 
 Du bist der **Architekt**. Deine einzige Aufgabe ist das Planen — nicht das Implementieren, nicht das Testen, nicht das QA-Prüfen.
@@ -1978,7 +1804,8 @@ tpl_agent_architect_reviewer() {
 name: architect-reviewer
 description: Unabhängige Second-Opinion zum Plan des Architekten. Prüft Spec-Konformität, Vollständigkeit, Abhängigkeits-Logik, Querschnittsthemen, FK-Alignment — bevor der Plan dem User zur Freigabe vorgelegt wird. Nutze diesen Agenten NACH dem Architekten und VOR User-Freigabe.
 tools: Read, Grep, Glob, WebFetch
-model: fable
+# model: opus — PO-Entscheid 2026-07-29: Opus ist der STANDARD fuer diese Rolle (nicht mehr fable). Datenlage: fable-Plaene kamen mit 6 bzw. 3 HIGH aus dem Review, der opus-Plan mit 1 HIGH bei gleichen Kosten. fable NUR als begruendeter Einzelfall bei crate-uebergreifender Haerte (>=3 Crates / metrys-api-Vertragsaenderung / widerlegte Praemissen) und NUR nach Genehmigung durch mac-main, Begruendung vorher im Ledger. Siehe Memory project_subagent_model_assignment.
+model: opus
 ---
 
 Du bist der **Architekt-Reviewer**. Du prüfst einen fertigen Plan, den ein anderer Architekt erstellt hat, bevor der User ihn freigibt. Deine Unabhängigkeit vom erstellenden Architekten ist dein zentraler Wert.
