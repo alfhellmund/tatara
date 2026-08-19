@@ -4,7 +4,8 @@
 #
 # Modi:
 #   tatara                        Interaktiver Wizard (Name + Beschreibung) bei TTY
-#   tatara <NAME> [BESCHREIBUNG]  Neues Projekt unter ~/Development/<NAME> anlegen
+#   tatara <NAME> [BESCHREIBUNG]  Projekt unter ~/Development/<NAME> anlegen oder ergaenzen
+#   tatara --dry-run <NAME> ...   Probelauf: zeigt an, was angelegt/behalten wuerde
 #   tatara --check                Globale Voraussetzungen + optionale KI-CLIs pruefen
 #   tatara --bootstrap-globals    Fehlende globale ~/.claude/* Dateien anlegen
 #   tatara --snapshot-globals     Aktuelle ~/.claude/* Dateien als Templates sichern
@@ -18,6 +19,7 @@ CLAUDE_GLOBAL_DIR="$HOME/.claude"
 SUBAGENTS=(architect architect-reviewer developer qa-reviewer security-reviewer test-writer)
 AI_CLIS=(gemini codex)           # optionale KI-CLIs (Soft-Check in --check; claude hat eigenen Statusblock)
 OS="$(uname)"
+DRY_RUN=0                        # via --dry-run; Probelauf ohne Schreibzugriff
 BEADS_INSTALL_URL="https://raw.githubusercontent.com/gastownhall/beads/main/scripts/install.sh"
 CLAUDE_INSTALL_URL="https://claude.ai/install.sh"
 
@@ -245,9 +247,6 @@ msg_fmt() {
     err_name_required)
       de="Projektname erforderlich. Nutze 'tatara -h' fuer Hilfe."
       en="Project name required. Use 'tatara -h' for help." ;;
-    err_target_exists)
-      de='%s existiert bereits'
-      en='%s already exists' ;;
     info_globals_incomplete)
       de='Globale Voraussetzungen unvollstaendig — bootstrappe fehlende Dateien'
       en='Global prerequisites incomplete — bootstrapping missing files' ;;
@@ -389,6 +388,45 @@ msg_fmt() {
     header_check)
       de='== Pruefe Voraussetzungen =='
       en='== Checking prerequisites ==' ;;
+    err_target_not_dir)
+      de='%s existiert und ist kein Verzeichnis'
+      en='%s exists and is not a directory' ;;
+    err_dry_run_needs_name)
+      de='--dry-run ist nur zusammen mit einem Projektnamen moeglich'
+      en='--dry-run requires a project name' ;;
+    header_adopt_project)
+      de='== Ergaenze Geruest in bestehendem Projekt %s =='
+      en='== Completing scaffolding in existing project %s ==' ;;
+    info_dry_run)
+      de='Probelauf — es wird nichts geschrieben'
+      en='Dry run — nothing will be written' ;;
+    info_would_create)
+      de='wuerde anlegen: %s'
+      en='would create: %s' ;;
+    info_would_git_init)
+      de='wuerde git-Repository anlegen (git init -b main)'
+      en='would create git repository (git init -b main)' ;;
+    info_would_bd_init)
+      de='wuerde Beads initialisieren (bd init --stealth)'
+      en='would initialise Beads (bd init --stealth)' ;;
+    info_gitignore_kept)
+      de='.gitignore war vorhanden — Beads-Eintraege verworfen (stealth), dein Stand bleibt'
+      en='.gitignore already existed — Beads entries discarded (stealth), yours kept' ;;
+    info_adopt_untracked)
+      de='vorhandene Dateien bleiben unversioniert — bei Bedarf selbst mit git add aufnehmen'
+      en='existing files remain untracked — add them yourself with git add if wanted' ;;
+    log_created)
+      de='angelegt: %s'
+      en='created: %s' ;;
+    log_adopt_commit)
+      de='Commit der ergaenzten Geruestdateien'
+      en='Committing the added scaffolding files' ;;
+    ok_nothing_to_do)
+      de="Geruest in '%s' ist bereits vollstaendig — nichts zu tun"
+      en="Scaffolding in '%s' is already complete — nothing to do" ;;
+    ok_dry_run_done)
+      de='Probelauf beendet — es wurde nichts geschrieben'
+      en='Dry run finished — nothing was written' ;;
     # === END MESSAGE CATALOG ===
   esac
   if [[ "${TATARA_LANG:-en}" == de ]]; then printf '%s' "$de"; else printf '%s' "$en"; fi
@@ -419,7 +457,10 @@ NUTZUNG
   tatara                         Ohne Argumente: startet bei interaktivem Terminal
                                       einen Assistenten (Projektname, Beschreibung),
                                       sonst diese Hilfe
-  tatara <NAME> [BESCHREIBUNG]   Neues Projekt unter ~/Development/<NAME> anlegen
+  tatara <NAME> [BESCHREIBUNG]   Projekt unter ~/Development/<NAME> anlegen — existiert
+                                 der Ordner schon, wird nur Fehlendes ergaenzt
+  tatara --dry-run <NAME> ...    Probelauf: zeigt an, was angelegt und was behalten
+                                 wuerde, ohne etwas zu schreiben
                                       (Basis via PROJECTS_ROOT, s. UMGEBUNGSVARIABLEN)
   tatara --check                 Globale Voraussetzungen + optionale KI-CLIs pruefen
   tatara --bootstrap-globals     Fehlende globale ~/.claude/* Dateien anlegen
@@ -480,7 +521,10 @@ USAGE
   tatara                         No arguments: on an interactive terminal starts
                                       an assistant (project name, description),
                                       otherwise shows this help
-  tatara <NAME> [DESCRIPTION]    Create a new project under ~/Development/<NAME>
+  tatara <NAME> [DESCRIPTION]    Create project under ~/Development/<NAME> — if the
+                                 directory exists, only what is missing is added
+  tatara --dry-run <NAME> ...    Dry run: show what would be created and what would
+                                 be kept, without writing anything
                                       (base via PROJECTS_ROOT, see ENVIRONMENT VARIABLES)
   tatara --check                 Check global prerequisites + optional AI CLIs
   tatara --bootstrap-globals     Create missing global ~/.claude/* files
@@ -878,6 +922,45 @@ write_if_missing() {
   return 0
 }
 
+# Case-insensitive Existenzpruefung. Auf case-insensitiven Dateisystemen
+# (macOS-Standard) deckt [[ -e ]] beide Schreibweisen ab, auf Linux nicht —
+# dort entstuende neben einer vorhandenen readme.md eine zweite README.md.
+exists_ci() {
+  local path="$1"
+  [[ -e "$path" ]] && return 0
+  local dir base f lower
+  dir="$(dirname "$path")"
+  [[ -d "$dir" ]] || return 1
+  base="$(basename "$path" | tr '[:upper:]' '[:lower:]')"
+  for f in "$dir"/* "$dir"/.[!.]*; do
+    [[ -e "$f" ]] || continue
+    lower="$(printf '%s' "${f##*/}" | tr '[:upper:]' '[:lower:]')"
+    [[ "$lower" == "$base" ]] && return 0
+  done
+  return 1
+}
+
+# Legt eine Geruestdatei an, wenn sie fehlt; eine vorhandene bleibt unangetastet.
+# $1 = Pfad, ab $2 = Kommando, das den Inhalt auf stdout schreibt.
+# Rueckgabe 0 = angelegt, 1 = uebersprungen — damit Nacharbeit (chmod) nur beim
+# tatsaechlichen Anlegen laeuft. Haengt angelegte Pfade an CREATED an.
+scaffold_file() {
+  local path="$1"; shift
+  if exists_ci "$path"; then
+    ok "$(msg ok_kept "$path")"
+    return 1
+  fi
+  if [[ "$DRY_RUN" == "1" ]]; then
+    info "$(msg info_would_create "$path")"
+    return 1
+  fi
+  mkdir -p "$(dirname "$path")"
+  "$@" > "$path"
+  log "$(msg log_created "$path")"
+  CREATED+=("$path")
+  return 0
+}
+
 # Schreibt fehlende ~/.claude/* Dateien (ohne git/bd). Abrufbar von mode_tatara.
 ensure_globals() {
   mkdir -p "$CLAUDE_GLOBAL_DIR/agents"
@@ -1164,7 +1247,14 @@ mode_tatara() {
   if ! reason="$(validate_project_name "$name")"; then err "$reason"; fi
 
   local target="$PROJECTS_ROOT/$name"
-  [[ -e "$target" ]] && err "$(msg err_target_exists "$target")"
+  # Bestehendes Verzeichnis ist kein Abbruchgrund: im Adopt-Modus wird pro
+  # Artefakt geprueft und nur Fehlendes ergaenzt. Nur eine Datei gleichen
+  # Namens ist ein echter Konflikt.
+  local adopt=0
+  if [[ -e "$target" ]]; then
+    [[ -d "$target" ]] || err "$(msg err_target_not_dir "$target")"
+    adopt=1
+  fi
 
   # Pre-Flight: Pflicht (git/bd), Empfohlen (claude), Globals-Selbstheilung
   ensure_git
@@ -1182,43 +1272,103 @@ mode_tatara() {
     err "$(msg err_git_no_identity)"
   fi
 
-  printf '%s\n' "$(msg header_new_project "$name")"
+  if [[ $adopt -eq 1 ]]; then
+    printf '%s\n' "$(msg header_adopt_project "$name")"
+  else
+    printf '%s\n' "$(msg header_new_project "$name")"
+  fi
+  [[ "$DRY_RUN" == "1" ]] && info "$(msg info_dry_run)"
   log "$(msg log_dir "$target")"
+
+  # Probelauf auf einem noch nicht existierenden Ziel: es gibt nichts zu
+  # pruefen, alles fehlt per Definition. Auflisten statt anlegen.
+  if [[ "$DRY_RUN" == "1" && $adopt -eq 0 ]]; then
+    local p
+    info "$(msg info_would_git_init)"
+    for p in README.md CLAUDE.md .gitignore .claude/settings.json \
+             .claude/hooks/post-commit-verify.sh .claude/skills/kickoff/SKILL.md; do
+      info "$(msg info_would_create "$p")"
+    done
+    info "$(msg info_would_bd_init)"
+    printf '%s\n' ""
+    ok "$(msg ok_dry_run_done)"
+    return 0
+  fi
+
   mkdir -p "$target"
   cd "$target"
 
-  log "$(msg log_git_init)"
-  git init -b main -q
+  CREATED=()
+  local git_created=0
+
+  if [[ -d .git ]]; then
+    ok "$(msg ok_kept ".git")"
+  elif [[ "$DRY_RUN" == "1" ]]; then
+    info "$(msg info_would_git_init)"
+  else
+    log "$(msg log_git_init)"
+    git init -b main -q
+    git_created=1
+  fi
 
   log "$(msg log_write_files)"
-  tpl_readme_md "$name" "$desc" > README.md
-  tpl_project_claude_md "$name" "$desc" > CLAUDE.md
-  tpl_gitignore > .gitignore
+  scaffold_file README.md   tpl_readme_md         "$name" "$desc" || true
+  scaffold_file CLAUDE.md   tpl_project_claude_md "$name" "$desc" || true
+  scaffold_file .gitignore  tpl_gitignore                        || true
 
   log "$(msg log_write_claude_files)"
-  mkdir -p .claude/hooks
-  tpl_claude_settings_json > .claude/settings.json
-  tpl_post_commit_verify_sh > .claude/hooks/post-commit-verify.sh
-  chmod +x .claude/hooks/post-commit-verify.sh
+  scaffold_file .claude/settings.json tpl_claude_settings_json || true
+  if scaffold_file .claude/hooks/post-commit-verify.sh tpl_post_commit_verify_sh; then
+    chmod +x .claude/hooks/post-commit-verify.sh
+  fi
   log "$(msg log_write_skill)"
-  mkdir -p .claude/skills/kickoff
-  tpl_kickoff_skill > .claude/skills/kickoff/SKILL.md
+  scaffold_file .claude/skills/kickoff/SKILL.md tpl_kickoff_skill || true
 
-  log "$(msg log_bd_init)"
-  BD_NON_INTERACTIVE=1 bd init \
-    --skip-hooks --skip-agents --stealth --role maintainer >/dev/null
+  if [[ -d .beads ]]; then
+    ok "$(msg ok_kept ".beads")"
+  elif [[ "$DRY_RUN" == "1" ]]; then
+    info "$(msg info_would_bd_init)"
+  else
+    log "$(msg log_bd_init)"
+    # Stealth-Luecke: bd init traegt .dolt/ + .beads-credential-key in die
+    # .gitignore ein (versioniert). User-Direktive 'strikt lokal' verlangt
+    # eine unberuehrte .gitignore; Schutz uebernimmt .git/info/exclude.
+    # Vorher sichern statt hinterher blind ueberschreiben — im Adopt-Modus
+    # gehoert die .gitignore dem Projekt und darf nicht verlorengehen.
+    local gi_before=''
+    [[ -f .gitignore ]] && gi_before="$(cat .gitignore)"
+    BD_NON_INTERACTIVE=1 bd init \
+      --skip-hooks --skip-agents --stealth --role maintainer >/dev/null
+    if [[ -n "$gi_before" && "$gi_before" != "$(cat .gitignore 2>/dev/null)" ]]; then
+      log "$(msg log_gitignore_rewrite)"
+      printf '%s\n' "$gi_before" > .gitignore
+      [[ $adopt -eq 1 ]] && info "$(msg info_gitignore_kept)"
+    fi
+  fi
 
-  # Stealth-Luecke: bd init traegt .dolt/ + .beads-credential-key in
-  # .gitignore ein (versioniert). User-Direktive 'strikt lokal' verlangt
-  # frische .gitignore; Schutzfunktion uebernimmt .git/info/exclude.
-  # Unconditional ueberschreiben, weil .gitignore vor bd init nie staged
-  # wurde -> git diff hat nichts zu vergleichen.
-  log "$(msg log_gitignore_rewrite)"
-  tpl_gitignore > .gitignore
+  if [[ "$DRY_RUN" == "1" ]]; then
+    printf '%s\n' ""
+    ok "$(msg ok_dry_run_done)"
+    return 0
+  fi
 
-  log "$(msg log_initial_commit)"
-  git add -A
-  git commit -q -m "init: initial project scaffolding"
+  if [[ $adopt -eq 1 ]]; then
+    if [[ ${#CREATED[@]} -eq 0 ]]; then
+      printf '%s\n' ""
+      ok "$(msg ok_nothing_to_do "$name")"
+      return 0
+    fi
+    log "$(msg log_adopt_commit)"
+    # Nur die selbst angelegten Pfade — nie 'git add -A', sonst landet
+    # unversionierte Arbeit des Nutzers im Geruest-Commit.
+    git add -- "${CREATED[@]}"
+    git commit -q -m "chore: tatara scaffolding ergaenzen"
+    [[ $git_created -eq 1 ]] && info "$(msg info_adopt_untracked)"
+  else
+    log "$(msg log_initial_commit)"
+    git add -A
+    git commit -q -m "init: initial project scaffolding"
+  fi
 
   printf '%s\n' ""
   ok "$(msg tatara_project_ready "$name" "$target")"
@@ -2449,6 +2599,11 @@ AGENT_END
 
 main() {
   require_supported_os
+  if [[ "${1:-}" == "--dry-run" ]]; then
+    DRY_RUN=1
+    shift
+    { [[ $# -eq 0 ]] || [[ "${1:-}" == --* ]]; } && err "$(msg err_dry_run_needs_name)"
+  fi
   case "${1:-}" in
     -h|--help)
       show_help
