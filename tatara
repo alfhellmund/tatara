@@ -459,9 +459,9 @@ NUTZUNG
                                       sonst diese Hilfe
   tatara <NAME> [BESCHREIBUNG]   Projekt unter ~/Development/<NAME> anlegen — existiert
                                  der Ordner schon, wird nur Fehlendes ergaenzt
+                                      (Basis via PROJECTS_ROOT, s. UMGEBUNGSVARIABLEN)
   tatara --dry-run <NAME> ...    Probelauf: zeigt an, was angelegt und was behalten
                                  wuerde, ohne etwas zu schreiben
-                                      (Basis via PROJECTS_ROOT, s. UMGEBUNGSVARIABLEN)
   tatara --check                 Globale Voraussetzungen + optionale KI-CLIs pruefen
   tatara --bootstrap-globals     Fehlende globale ~/.claude/* Dateien anlegen
   tatara --snapshot-globals      Aktuelle ~/.claude/* Dateien als Templates ins
@@ -523,9 +523,9 @@ USAGE
                                       otherwise shows this help
   tatara <NAME> [DESCRIPTION]    Create project under ~/Development/<NAME> — if the
                                  directory exists, only what is missing is added
+                                      (base via PROJECTS_ROOT, see ENVIRONMENT VARIABLES)
   tatara --dry-run <NAME> ...    Dry run: show what would be created and what would
                                  be kept, without writing anything
-                                      (base via PROJECTS_ROOT, see ENVIRONMENT VARIABLES)
   tatara --check                 Check global prerequisites + optional AI CLIs
   tatara --bootstrap-globals     Create missing global ~/.claude/* files
   tatara --snapshot-globals      Write the current ~/.claude/* files back into the
