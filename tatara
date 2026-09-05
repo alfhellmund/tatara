@@ -377,8 +377,8 @@ msg_fmt() {
       de='wuerde anlegen: %s'
       en='would create: %s' ;;
     info_would_git_init)
-      de='wuerde git-Repository anlegen (git init -b main)'
-      en='would create git repository (git init -b main)' ;;
+      de='wuerde git-Repository anlegen (git init, Default-Branch main)'
+      en='would create git repository (git init, default branch main)' ;;
     info_would_bd_init)
       de='wuerde Beads initialisieren (bd init --stealth)'
       en='would initialise Beads (bd init --stealth)' ;;
@@ -1171,7 +1171,11 @@ mode_tatara() {
     info "$(msg info_would_git_init)"
   else
     log "$(msg log_git_init)"
-    git init -b main -q
+    # 'git init -b' gibt es erst ab git 2.28 (2020); Debian 10, Ubuntu 20.04 LTS
+    # und RHEL-Stock-git brechen damit ab. symbolic-ref setzt den Default-Branch
+    # versionsunabhaengig und funktioniert im frisch angelegten, leeren Repo.
+    git init -q
+    git symbolic-ref HEAD refs/heads/main
     git_created=1
   fi
 
