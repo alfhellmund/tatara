@@ -46,12 +46,28 @@ setup() {
 _setup_full_globals() {
     local claude_dir="${BATS_TEST_TMPDIR}/home/.claude"
     local agents_dir="${claude_dir}/agents"
-    mkdir -p "$agents_dir"
+    local hooks_dir="${claude_dir}/hooks"
+    mkdir -p "$agents_dir" "$hooks_dir"
     printf 'dummy\n' > "${claude_dir}/CLAUDE.md"
     printf 'dummy\n' > "${claude_dir}/software-development-workflow.md"
     for agent in architect architect-reviewer developer qa-reviewer security-reviewer test-writer; do
         printf 'dummy\n' > "${agents_dir}/${agent}.md"
     done
+    # Seit 2026-09-05 gehoeren die globalen Hooks und ihre Registrierung zu den
+    # Globals: --check meldet sie, --snapshot-globals braucht sie als Quelle,
+    # --bootstrap-globals legt sie an. "Vollstaendig" heisst also auch diese.
+    for hook in post-commit-verify.sh stop-absichtserklaerung.sh; do
+        printf '#!/usr/bin/env bash\nexit 0\n' > "${hooks_dir}/${hook}"
+        chmod +x "${hooks_dir}/${hook}"
+    done
+    cat > "${claude_dir}/settings.json" <<'SETTINGS_FIXTURE'
+{
+  "hooks": {
+    "PostToolUse": [ { "matcher": "Bash", "hooks": [ { "type": "command", "command": "$HOME/.claude/hooks/post-commit-verify.sh" } ] } ],
+    "Stop": [ { "hooks": [ { "type": "command", "command": "$HOME/.claude/hooks/stop-absichtserklaerung.sh" } ] } ]
+  }
+}
+SETTINGS_FIXTURE
 }
 
 # PATH ohne claude: Temp-Verzeichnis mit git, bd, curl (NICHT claude).

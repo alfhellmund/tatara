@@ -17,6 +17,8 @@ set -euo pipefail
 PROJECTS_ROOT="${PROJECTS_ROOT:-$HOME/Development}"
 CLAUDE_GLOBAL_DIR="$HOME/.claude"
 SUBAGENTS=(architect architect-reviewer developer qa-reviewer security-reviewer test-writer)
+# Globale Hook-Dateien unter ~/.claude/hooks/ — die Mechanik hinter den Regeln.
+GLOBAL_HOOKS=(post-commit-verify.sh stop-absichtserklaerung.sh)
 AI_CLIS=(gemini codex)           # optionale KI-CLIs (Soft-Check in --check; claude hat eigenen Statusblock)
 OS="$(uname)"
 DRY_RUN=0                        # via --dry-run; Probelauf ohne Schreibzugriff
@@ -467,6 +469,10 @@ GLOBALE VORAUSSETZUNGEN (geprueft vor jedem Setup)
   ~/.claude/software-development-workflow.md
   ~/.claude/agents/<6 Subagenten>.md   architect, architect-reviewer, developer,
                                        qa-reviewer, security-reviewer, test-writer
+  ~/.claude/hooks/<2 Hooks>.sh         post-commit-verify (Commit-Stat nach jedem
+                                       Commit), stop-absichtserklaerung
+  ~/.claude/settings.json              Registrierung dieser Hooks (nur ergaenzt,
+                                       Bestehendes bleibt) — braucht jq
 
 UMGEBUNGSVARIABLEN
   TATARA_INTERACTIVE               1 erzwingt interaktiven Modus (Wizard ohne Argumente);
@@ -529,6 +535,10 @@ GLOBAL PREREQUISITES (checked before every setup)
   ~/.claude/software-development-workflow.md
   ~/.claude/agents/<6 subagents>.md    architect, architect-reviewer, developer,
                                        qa-reviewer, security-reviewer, test-writer
+  ~/.claude/hooks/<2 hooks>.sh         post-commit-verify (commit stat after each
+                                       commit), stop-absichtserklaerung
+  ~/.claude/settings.json              registration of these hooks (additive only,
+                                       existing content kept) — requires jq
 
 ENVIRONMENT VARIABLES
   TATARA_INTERACTIVE               1 forces interactive mode (wizard without args);
@@ -704,6 +714,18 @@ missing_globals() {
   for a in "${SUBAGENTS[@]}"; do
     [[ -f "$CLAUDE_GLOBAL_DIR/agents/$a.md" ]] || missing+=("~/.claude/agents/$a.md")
   done
+  local h
+  for h in "${GLOBAL_HOOKS[@]}"; do
+    [[ -f "$CLAUDE_GLOBAL_DIR/hooks/$h" ]] || missing+=("~/.claude/hooks/$h")
+  done
+  # Vorhandene Datei genuegt nicht — sie muss auch registriert sein.
+  if command -v jq >/dev/null 2>&1 && [[ -f "$CLAUDE_GLOBAL_DIR/settings.json" ]]; then
+    for h in "${GLOBAL_HOOKS[@]}"; do
+      jq -e --arg h "$h" '[.hooks[]?[]?.hooks[]?.command] | any(contains($h))' \
+        "$CLAUDE_GLOBAL_DIR/settings.json" >/dev/null 2>&1 \
+        || missing+=("~/.claude/settings.json: Hook $h nicht registriert")
+    done
+  fi
   if (( ${#missing[@]} )); then printf '%s\n' "${missing[@]}"; fi
 }
 
@@ -835,6 +857,74 @@ ensure_globals() {
       ok "$(msg ok_written "$HOME/.claude/agents/$a.md")"
     fi
   done
+
+  # Hooks: ohne sie sind die Regeln oben blosse Bitten.
+  mkdir -p "$CLAUDE_GLOBAL_DIR/hooks"
+  local h ziel
+  for h in "${GLOBAL_HOOKS[@]}"; do
+    ziel="$CLAUDE_GLOBAL_DIR/hooks/$h"
+    if write_if_missing "$ziel"; then
+      case "$h" in
+        post-commit-verify.sh)       tpl_global_hook_post_commit_verify > "$ziel" ;;
+        stop-absichtserklaerung.sh)  tpl_global_hook_stop_absichtserklaerung > "$ziel" ;;
+      esac
+      chmod +x "$ziel"
+      ok "$(msg ok_written "$HOME/.claude/hooks/$h")"
+    fi
+  done
+  merge_global_hooks
+}
+
+# Registriert die globalen Hooks in ~/.claude/settings.json. Streng additiv:
+# ergaenzt wird nur, was noch nicht drinsteht (Vergleich ueber das command-Feld).
+# Allow-Listen, Modellwahl und fremde Hooks bleiben unangetastet; mehrfaches
+# Ausfuehren aendert nichts. Ohne jq wird uebersprungen statt geraten.
+merge_global_hooks() {
+  local ziel="$CLAUDE_GLOBAL_DIR/settings.json"
+  local vorlage tmp
+  if ! command -v jq >/dev/null 2>&1; then
+    warn "jq fehlt — Hook-Registrierung in settings.json uebersprungen (jq installieren, dann erneut ausfuehren)."
+    return 0
+  fi
+  vorlage="$(mktemp "${TMPDIR:-/tmp}/tatara-hooks.XXXXXX")"
+  tpl_global_hooks_json > "$vorlage"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/tatara-settings.XXXXXX")"
+
+  if [[ ! -f "$ziel" ]]; then
+    jq -n --slurpfile t "$vorlage" '{"$schema": "https://json.schemastore.org/claude-code-settings.json", hooks: $t[0]}' > "$tmp"
+  else
+    if ! jq -e . "$ziel" >/dev/null 2>&1; then
+      rm -f "$vorlage" "$tmp"
+      warn "$HOME/.claude/settings.json ist kein gueltiges JSON — Hook-Registrierung uebersprungen."
+      return 0
+    fi
+    jq --slurpfile t "$vorlage" '
+      . as $cur
+      | ($t[0]) as $neu
+      | reduce ($neu | keys_unsorted[]) as $ev ($cur;
+          .hooks = (.hooks // {})
+          | .hooks[$ev] = (
+              (.hooks[$ev] // []) as $vorhanden
+              | ($vorhanden | [ .[].hooks[]?.command ]) as $bekannt
+              | $vorhanden + ( $neu[$ev]
+                  | map(select( [ .hooks[]?.command ]
+                        | any(. as $c | ($bekannt | index($c)) != null) | not )) )
+            )
+        )' "$ziel" > "$tmp"
+  fi
+
+  if ! jq -e . "$tmp" >/dev/null 2>&1; then
+    rm -f "$vorlage" "$tmp"
+    err "Hook-Registrierung erzeugte ungueltiges JSON — settings.json unveraendert."
+  fi
+  if [[ -f "$ziel" ]] && cmp -s "$ziel" "$tmp"; then
+    ok "$(msg ok_kept "$HOME/.claude/settings.json")"
+  else
+    [[ -f "$ziel" ]] && cp -f "$ziel" "$ziel.bak"
+    mv "$tmp" "$ziel"
+    ok "$(msg ok_written "$HOME/.claude/settings.json")"
+  fi
+  rm -f "$vorlage" "$tmp"
 }
 
 mode_bootstrap_globals() {
@@ -859,6 +949,9 @@ mode_bootstrap_globals() {
 sanitize_for_export() {
   awk '
     /^# model: / { next }
+    # Kommentarzeilen mit internem Bezug fallen ganz weg (z.B. der Anlass-Vermerk
+    # im Stop-Hook). Nur Kommentare — Code bleibt unangetastet.
+    /^[ \t]*#/ && /Metrys|metrys|BaroWatch|StarPath|Boatlog|SonoScale|Schein-oder-Sein|mac-main|Ledger|PO-Entscheid/ { next }
     index($0, "Imperative Einzeiler.") == 1 {
       print "Imperative Einzeiler. Narrative (Warum, konkrete Situation, How-to-apply) stehen als eigene Datei, nicht hier: projektuebergreifend Geltendes in einem eigenen Erkenntnis-Verzeichnis, projektspezifisches im Memory des jeweiligen Projekts. Verstoss gilt als Fehler, nicht als Nachlaessigkeit."
       next
@@ -871,7 +964,11 @@ sanitize_for_export() {
       print "- **\"Fertig\" nur mit Belegen.** `git show HEAD --stat` gegen Commit-Message, Tests gruen mit zitierter Zahl, Architekten-Review abgenommen. Fehlt einer der drei: keine Fertig-Meldung, sondern die Luecke benennen."
       next
     }
-    { gsub(/ \(`feedback_[a-z_]+\.md`\)/, ""); print }
+    {
+      gsub(/ \(`feedback_[a-z_]+\.md`\)/, "")
+      gsub(/ Siehe feedback_[a-z_]+\.md\./, "")
+      print
+    }
   '
 }
 
@@ -907,13 +1004,30 @@ mode_snapshot_globals() {
 
   # Kollisions-Guard: Quelldateien duerfen keine Heredoc-Delimiter oder Marker als exakte Zeile enthalten.
   local _collision_delimiters=('AGENT_END' 'GLOBAL_CLAUDE_END' 'GLOBAL_WORKFLOW_END'
+    'HOOK_PCV_END' 'HOOK_STOP_END' 'GLOBAL_HOOKS_JSON_END'
     '# === BEGIN AUTO-SNAPSHOT TEMPLATES ===' '# === END AUTO-SNAPSHOT TEMPLATES ==='
     '# === BEGIN MESSAGE CATALOG ===' '# === END MESSAGE CATALOG ===')
+  # Die Hooks sind die Mechanik hinter den Regeln — ohne sie haengt alles am
+  # Wohlwollen des Modells. Sie gehoeren deshalb in den Snapshot.
+  local _h
+  for _h in "${GLOBAL_HOOKS[@]}"; do
+    [[ -f "$CLAUDE_GLOBAL_DIR/hooks/$_h" ]] \
+      || { warn "$(msg warn_snapshot_missing_file "$HOME/.claude/hooks/$_h")"; missing_count=1; }
+  done
+  [[ -f "$CLAUDE_GLOBAL_DIR/settings.json" ]] \
+    || { warn "$(msg warn_snapshot_missing_file "$HOME/.claude/settings.json")"; missing_count=1; }
+  (( missing_count )) && err "$(msg err_snapshot_aborted_missing)"
+  command -v jq >/dev/null 2>&1 \
+    || err "jq wird zum Auslesen der Hook-Registrierung gebraucht (brew/apt install jq)."
+
   local _src_files=()
   _src_files+=("$CLAUDE_GLOBAL_DIR/CLAUDE.md")
   _src_files+=("$CLAUDE_GLOBAL_DIR/software-development-workflow.md")
   for a in "${SUBAGENTS[@]}"; do
     _src_files+=("$CLAUDE_GLOBAL_DIR/agents/$a.md")
+  done
+  for _h in "${GLOBAL_HOOKS[@]}"; do
+    _src_files+=("$CLAUDE_GLOBAL_DIR/hooks/$_h")
   done
   local _delim _file
   for _file in "${_src_files[@]}"; do
@@ -974,6 +1088,28 @@ mode_snapshot_globals() {
       printf '%s\n' "AGENT_END"
       printf '%s\n' "}"
     done
+    printf '\n'
+    printf '%s\n' "tpl_global_hook_post_commit_verify() {"
+    printf '%s\n' "  cat <<'HOOK_PCV_END'"
+    sanitize_for_export < "$CLAUDE_GLOBAL_DIR/hooks/post-commit-verify.sh"
+    printf '%s\n' "HOOK_PCV_END"
+    printf '%s\n' "}"
+    printf '\n'
+    printf '%s\n' "tpl_global_hook_stop_absichtserklaerung() {"
+    printf '%s\n' "  cat <<'HOOK_STOP_END'"
+    sanitize_for_export < "$CLAUDE_GLOBAL_DIR/hooks/stop-absichtserklaerung.sh"
+    printf '%s\n' "HOOK_STOP_END"
+    printf '%s\n' "}"
+    printf '\n'
+    printf '%s\n' "# Nur der hooks-Block der globalen settings.json. Absolute Heimatpfade"
+    printf '%s\n' "# werden auf \$HOME umgeschrieben, damit die Registrierung auf jedem"
+    printf '%s\n' "# Rechner passt. Alles andere aus der settings.json bleibt draussen."
+    printf '%s\n' "tpl_global_hooks_json() {"
+    printf '%s\n' "  cat <<'GLOBAL_HOOKS_JSON_END'"
+    jq --arg home "$HOME" '(.hooks // {}) | walk(if type == "string" then sub("^" + $home; "$HOME") else . end)' \
+      "$CLAUDE_GLOBAL_DIR/settings.json" | sanitize_for_export
+    printf '%s\n' "GLOBAL_HOOKS_JSON_END"
+    printf '%s\n' "}"
     printf '%s\n' "# === END AUTO-SNAPSHOT TEMPLATES ==="
   } > "$tmpblock"
 
@@ -2560,6 +2696,393 @@ Wenn du beim Schreiben eines Tests einen dieser Gedanken hast, ist der Test fals
 
 Wenn du wüsstest, wie die Impl später aussieht, würden deine Tests deren Pfad nachzeichnen statt das Verhalten zu prüfen. Das macht Tests fragil und übersieht Lücken. Deine Unwissenheit über die Impl ist dein wichtigster Qualitäts-Hebel.
 AGENT_END
+}
+
+tpl_global_hook_post_commit_verify() {
+  cat <<'HOOK_PCV_END'
+#!/bin/bash
+# Done-Gatekeeping: after every `git commit` via the Bash tool,
+# show `git show HEAD --stat` so the commit message can be checked
+# against the actual diff. Prevents false-positive reports like
+# "wired up in start_server" when lib.rs is not part of the commit.
+
+set -e
+
+# Tool input is piped in as JSON on stdin.
+input=$(cat)
+
+# Only act on Bash commands that contain `git commit`.
+command=$(echo "$input" | jq -r '.tool_input.command // empty')
+if [[ -z "$command" ]]; then
+    exit 0
+fi
+if ! echo "$command" | grep -qE '(^|[^a-zA-Z])git commit'; then
+    exit 0
+fi
+
+# Skip `git commit --dry-run` / `git commit --help` etc.
+if echo "$command" | grep -qE 'git commit.*(--dry-run|--help|-h[[:space:]]|-h$)'; then
+    exit 0
+fi
+
+# Use the tool's reported cwd so the hook works across projects.
+cwd=$(echo "$input" | jq -r '.cwd // empty')
+if [[ -n "$cwd" && -d "$cwd" ]]; then
+    cd "$cwd"
+fi
+
+# Grab HEAD stat — fail silently if the commit did not actually land
+# (e.g. pre-commit hook rejected it).
+stat=$(git show HEAD --stat 2>/dev/null || true)
+if [[ -z "$stat" ]]; then
+    exit 0
+fi
+
+# Feed the stat back as additional context so Claude has to look at it
+# before declaring the commit successful.
+jq -n --arg stat "$stat" '{
+  "hookSpecificOutput": {
+    "hookEventName": "PostToolUse",
+    "additionalContext": ("HEAD-COMMIT STAT (auto-verified via hook — compare against your commit message before declaring \"done\"):\n\n" + $stat)
+  }
+}'
+HOOK_PCV_END
+}
+
+tpl_global_hook_stop_absichtserklaerung() {
+  cat <<'HOOK_STOP_END'
+#!/usr/bin/env bash
+# Stop-Hook: erkennt eine Absichtserklaerung im letzten Assistenz-Text dieses
+# Turns ("ich starte...", "ich hole ab...", "das setze ich jetzt an"), zu der
+# im selben Turn KEIN Werkzeugaufruf gehoert -- und blockiert das Turn-Ende.
+#
+# ANLASS (2026-08-23): Der PO musste zweimal nachfragen ("Laeuft was?", "Wie
+# laeuft deine Pruefung?"), weil eine Antwort den naechsten Schritt ANKUENDIGT
+# und im selben Zug NICHT ausfuehrt: "Ich lege das Raster jetzt ab und starte
+# den Durchgang" -- und der Turn endet auf reinem Text, ohne zugehoerigen
+# Bash/Write/Edit/Agent-Aufruf. Die Absicht ist beim naechsten Turn verloren;
+# erst die Nachfrage des PO loest die Handlung aus. Genau das soll dieser
+# Waechter uebernehmen.
+#
+# und die ersten beiden Male nur mit UNPERSOENLICHEN Saetzen, die die
+# Ich-Erkennung unten nicht sieht: "Als Naechstes Phase B: ..." und "Es fehlen
+# noch B4 und B5. Danach der QA-Review." Kein "ich", kein Aktionsverb --
+# trotzdem eine Ankuendigung, die den Turn beendet. Deshalb eine zweite,
+# ebenso eng kuratierte Erkennung: eine Liste von Einleitungen, die nur am
+# SATZANFANG zaehlen. Ein Schlussabsatz, der den naechsten eigenen Schritt
+# benennt, ist der eigentliche Ausloeser -- nicht die Wortwahl.
+#
+# MECHANIK (Vorlage: stop-ci-check.sh): Blockade laeuft ueber die JSON-
+# "decision"-Ausgabe bei Exit 0, nie ueber den Exit-Code -- Stop-Hooks in
+# Claude Code signalisieren so, nicht per Exit-Status.
+#
+# TURN-GRENZE: der letzte "user"-Eintrag im Transkript, dessen Inhalt KEIN
+# reiner Tool-Result ist. Das erfasst gleichermassen eine echte Nutzereingabe,
+# ein Stop-Hook-Feedback (siehe stop-ci-check.sh) und eine Task-Notification
+# eines Subagenten -- alle drei starten aus Sicht des Modells einen neuen
+# Turn. Alles, was danach an Assistenz-Antworten folgt, ist "dieser Turn".
+#
+# ERKENNUNG bewusst ENG (Lehre aus bd-create-balance.sh: ein Gate, das zu oft
+# anschlaegt, wird weggeklickt und schuetzt danach nichts mehr): angeschlagen
+# wird nur bei einer kuratierten Liste deutscher Ich-Aktionsverben in einem
+# Nicht-Fragesatz, ohne Vergangenheits-/Konjunktiv-/Vorschlags-Marker und ohne
+# erkennbares Drittakteur-Subjekt. Ein Turn mit Agent/Bash/Write/Edit-Aufruf
+# ist immer in Ordnung -- unabhaengig davon, WO im Turn der Aufruf stand: dort
+# wurde gehandelt. Ein reiner Lese-Aufruf (Read/Grep) zaehlt NICHT als
+# Handlung, wird aber mit eigenem Text gemeldet, damit die Meldung nicht in
+# die Irre fuehrt.
+#
+# stop_hook_active: Claude Code setzt dieses Feld, wenn der aktuelle Stop
+# bereits die Folge einer vorherigen Hook-Blockade ist (Konvention aus dem
+# Claude-Code-Hook-Oekosystem, z.B. security-guidance-Plugin). Dann blockiert
+# dieser Hook NICHT zusaetzlich -- die Sitzung wird schon aus einem anderen
+# Grund am Abschliessen gehindert.
+#
+# FAIL-OPEN: kein Transkript, kein Python3, jeder Parse-/Lesefehler -> still
+# Exit 0. Dieser Hook liest nur, er schreibt nirgendwo.
+set -u
+
+input="$(cat 2>/dev/null || true)"
+[ -n "$input" ] || exit 0
+
+command -v python3 >/dev/null 2>&1 || exit 0
+
+python3 - "$input" <<'PY'
+import json
+import os
+import re
+import sys
+
+
+def normalize(s: str) -> str:
+    s = s.lower()
+    for a, b in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
+        s = s.replace(a, b)
+    return s
+
+
+PAST_MARKERS = (
+    "ich habe", "habe ich", "ich hatte", "hatte ich",
+    "ist committet", "wurde committet", "habe committet",
+    "ist erledigt", "wurde erledigt", "habe erledigt",
+    "ist abgeschlossen", "wurde abgeschlossen", "habe abgeschlossen",
+    "ist gepusht", "wurde gepusht", "habe gepusht",
+    "ist gestartet", "wurde gestartet", "bin fertig",
+    "war bereits", "habe bereits",
+)
+
+SUBJUNCTIVE_MARKERS = (
+    "wuerde", "wuerden", "sollte ich", "soll ich", "koennte ich",
+    "waere es", "waere gut", "waere sinnvoll", "mein vorschlag",
+    "ich schlage vor", "koennten wir", "lass uns", "lasst uns",
+    "wollen wir", "liesse sich",
+)
+
+# Sitzt nur am Satzanfang, damit ein "ich" spaeter im selben Satz (z.B. in
+# einem Nebensatz) den Ausschluss nicht faelschlich auf den ganzen Satz zieht.
+THIRD_PARTY_PREFIXES = (
+    "der agent", "die ci", "der ci", "mac ", "mac,", "mac zieht",
+    "das team", "der server", "die pipeline", "der workflow",
+    "der job", "der test ", "der tests", "der build", "der hook",
+    "die suite", "der runner", "der po", "der architect", "der qa",
+    "die engine", "der andere agent", "die andere session",
+)
+
+VERB_STEMS = (
+    "starte", "beginne", "pruefe", "setze", "baue",
+    "stoesse an", "hole ab", "hole", "lege ab", "lege an",
+    "fuehre aus", "fuehre durch", "mache weiter", "mache",
+    "teste", "behebe", "korrigiere", "ergaenze", "committe",
+    "pushe", "fahre", "schreibe", "implementiere", "erstelle",
+    "sende", "wiederhole", "aktualisiere", "oeffne", "schliesse",
+    "checke", "triggere", "analysiere", "validiere", "generiere",
+    "raeume auf", "gehe weiter", "arbeite weiter", "wende an",
+    "passe an",
+)
+
+# Unpersoenliche Ankuendigungen: zaehlen NUR am Satzanfang, damit ein "danach"
+# oder "als naechstes" mitten im Satz (Bericht ueber bereits Geschehenes) nicht
+# anschlaegt. Bewusst kurz gehalten -- jede Aufnahme muss einen realen Verstoss
+# abdecken, nicht einen denkbaren.
+IMPERSONAL_PREFIXES = (
+    "als naechstes",
+    "es fehlen noch", "es fehlt noch",
+    "danach folgt", "danach folgen", "danach der", "danach die", "danach das",
+    "im anschluss",
+    "der naechste schritt",
+    "weiter geht es",
+    "dann folgt", "dann folgen", "dann kommt",
+    "anschliessend folgt", "anschliessend kommt",
+    "offen bleibt noch", "offen bleiben noch",
+    "es folgt", "es folgen",
+)
+
+ACTION_TOOLS = {"Agent", "Bash", "Write", "Edit"}
+READ_TOOLS = {"Read", "Grep"}
+
+# Markdown-Strukturzeilen beschreiben, sie kuendigen nicht an. Eine Tabellen-
+# zelle wie "| Ich sehe etwas und behebe es ungefragt | ... |" ist ein Beispiel
+# fuer ein Verhalten, keine Absicht. (Fehlalarm 2026-09-05)
+STRUCT_LINE = re.compile(r"^\s*(\||>\s|```|- \*\*[^*]+\*\*\s*\|)")
+
+# Aufschiebende oder verneinende Nebensaetze kehren die Aussage um: "..., bevor
+# ich schreibe" ist das Gegenteil einer Ankuendigung. Der Nebensatz wird
+# herausgeschnitten, der Rest normal geprueft -- "Bevor ich schreibe, pruefe ich
+# X" schlaegt also weiter an. (Fehlalarm 2026-09-05)
+DEFERRED_CLAUSE = re.compile(
+    r"\b(bevor|statt|anstatt|ohne dass|ohne zu|solange nicht|nicht bevor)\b"
+    r"[^,;.!?\u2013\u2014]*"
+)
+
+
+def split_sentences(text: str):
+    parts = re.split(r"(?<=[.!?])\s+|\n+", text)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def is_announcement(raw: str) -> bool:
+    if raw.rstrip().endswith("?"):
+        return False
+    if STRUCT_LINE.match(raw):
+        return False
+    norm = normalize(raw)
+    if norm.startswith(THIRD_PARTY_PREFIXES):
+        return False
+    if any(m in norm for m in PAST_MARKERS):
+        return False
+    if any(m in norm for m in SUBJUNCTIVE_MARKERS):
+        return False
+    # Zweig 1: Ich-Satz mit Aktionsverb, ohne aufschiebende Nebensaetze.
+    kern = DEFERRED_CLAUSE.sub(" ", norm)
+    if re.search(r"\bich\b", kern) and any(v in kern for v in VERB_STEMS):
+        return True
+    # Zweig 2: unpersoenliche Einleitung am Satzanfang. Kein "ich" noetig --
+    # genau das war die Luecke, durch die zwei von drei Verstoessen fielen.
+    if norm.startswith(IMPERSONAL_PREFIXES):
+        return True
+    return False
+
+
+def load_entries(transcript_path: str):
+    entries = []
+    with open(transcript_path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            if d.get("type") not in ("user", "assistant"):
+                continue
+            entries.append(d)
+    return entries
+
+
+def find_boundary(entries) -> int:
+    boundary = -1
+    for i, e in enumerate(entries):
+        if e.get("type") != "user":
+            continue
+        content = e.get("message", {}).get("content")
+        if isinstance(content, str):
+            boundary = i
+        elif isinstance(content, list):
+            if not any(
+                isinstance(c, dict) and c.get("type") == "tool_result"
+                for c in content
+            ):
+                boundary = i
+    return boundary
+
+
+def collect_turn(entries, boundary: int):
+    turn = entries[boundary + 1:] if boundary >= 0 else entries
+    tool_names = set()
+    texts = []
+    for e in turn:
+        if e.get("type") != "assistant":
+            continue
+        for c in e.get("message", {}).get("content", []) or []:
+            if not isinstance(c, dict):
+                continue
+            ct = c.get("type")
+            if ct == "tool_use":
+                name = c.get("name")
+                if name:
+                    tool_names.add(name)
+            elif ct == "text":
+                txt = c.get("text") or ""
+                if txt.strip():
+                    texts.append(txt)
+    return tool_names, texts
+
+
+def main():
+    try:
+        hook_input = json.loads(sys.argv[1])
+    except Exception:
+        return
+
+    if hook_input.get("stop_hook_active"):
+        return
+
+    transcript_path = hook_input.get("transcript_path") or ""
+    if not transcript_path or not os.path.isfile(transcript_path):
+        return
+
+    try:
+        entries = load_entries(transcript_path)
+    except Exception:
+        return
+
+    boundary = find_boundary(entries)
+    tool_names, texts = collect_turn(entries, boundary)
+
+    if tool_names & ACTION_TOOLS:
+        return  # gehandelt -- in Ordnung, unabhaengig von der Position im Turn.
+
+    if not texts:
+        return
+
+    last_text = texts[-1]
+    matched = None
+    for sentence in split_sentences(last_text):
+        if is_announcement(sentence):
+            matched = sentence
+            break
+
+    if matched is None:
+        return
+
+    if tool_names & READ_TOOLS:
+        reason = (
+            'Angekuendigte Handlung ohne Umsetzung: "%s" -- im Turn stehen nur '
+            "lesende Aufrufe (Read/Grep), keine Handlung. Lesen erfuellt die "
+            "Ankuendigung nicht: fuehre die angekuendigte Handlung jetzt aus "
+            "(Bash/Write/Edit/Agent), bevor du abschliesst." % matched
+        )
+    else:
+        reason = (
+            'Angekuendigte Handlung ohne Umsetzung: "%s" -- der Turn endet ohne '
+            "zugehoerigen Werkzeugaufruf. Fuehre die angekuendigte Handlung "
+            "jetzt aus (Bash/Write/Edit/Agent), bevor du abschliesst, oder "
+            "formuliere um, wenn keine Handlung folgt." % matched
+        )
+
+    print(json.dumps({"decision": "block", "reason": reason}))
+
+
+try:
+    main()
+except Exception:
+    pass
+PY
+exit 0
+HOOK_STOP_END
+}
+
+# Nur der hooks-Block der globalen settings.json. Absolute Heimatpfade
+# werden auf $HOME umgeschrieben, damit die Registrierung auf jedem
+# Rechner passt. Alles andere aus der settings.json bleibt draussen.
+tpl_global_hooks_json() {
+  cat <<'GLOBAL_HOOKS_JSON_END'
+{
+  "UserPromptSubmit": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"SAUBERER-PFAD-MANDAT: Bei jeder Mehr-Optionen-Frage MUSST du zuerst den sauberen Pfad aus Memory + Architektur-Prinzipien ableiten und ihn explizit als (Empfohlen, sauberer Pfad — Begründung: ...) markieren. Trade-off-Optionen ohne Sauber-Markierung sind verboten, außer bei objektiv eindeutiger User-Präferenz (z.B. UI-Farbe). Begründungsketten halten Memory-Cross-Reference konkret.\"}}'"
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/stop-absichtserklaerung.sh",
+          "statusMessage": "Pruefe auf angekuendigte, aber nicht ausgefuehrte Handlung ..."
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/post-commit-verify.sh"
+        }
+      ]
+    }
+  ]
+}
+GLOBAL_HOOKS_JSON_END
 }
 # === END AUTO-SNAPSHOT TEMPLATES ===
 

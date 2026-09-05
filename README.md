@@ -97,6 +97,11 @@ prompt) via Homebrew (macOS) or `apt` / `dnf` / `pacman` / `zypper` (Linux); on
 Linux without Homebrew, `bd` uses the official Beads install script. The only
 prerequisite you install yourself is a package manager (macOS: Homebrew).
 
+`jq` is required for two things: `--snapshot-globals` reads the hook registration
+out of `~/.claude/settings.json`, and `--bootstrap-globals` merges it back in. The
+generated per-project commit hook needs it at runtime too. Without `jq` the hook
+registration is skipped with a warning; everything else works.
+
 git needs a configured identity — set `git config --global user.name "..."` and
 `git config --global user.email "..."` once; without it tatara stops before
 creating the project (the initial commit would otherwise fail).
@@ -194,6 +199,12 @@ unterstützt (kein nativer Port). Fehlende Tools `git` und `bd` werden bei Bedar
 `pacman` / `zypper` (Linux); auf Linux ohne Homebrew zieht `bd` das offizielle
 Beads-Install-Skript. Einzige selbst zu installierende Voraussetzung ist ein
 Paketmanager (macOS: Homebrew).
+
+`jq` wird an zwei Stellen gebraucht: `--snapshot-globals` liest die
+Hook-Registrierung aus `~/.claude/settings.json`, `--bootstrap-globals` mischt sie
+dort wieder ein. Der erzeugte projektlokale Commit-Hook braucht es zur Laufzeit
+ebenfalls. Ohne `jq` wird die Registrierung mit einer Warnung übersprungen, alles
+andere läuft.
 
 git braucht eine konfigurierte Identität — einmalig `git config --global
 user.name "..."` und `git config --global user.email "..."` setzen; ohne sie
