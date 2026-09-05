@@ -848,6 +848,47 @@ mode_bootstrap_globals() {
   printf '%s\n' "$(msg ok_globals_ready)"
 }
 
+# === Export-Filter fuer den Snapshot ===
+# tatara ist oeffentlich, die lokalen Regeldateien sind es nicht: sie nennen
+# Erkenntnis-Dateinamen, Projektnamen und interne Entscheidungen. Beim Einbetten
+# wird deshalb gefiltert. Die Dateien unter ~/.claude bleiben unberuehrt.
+#
+# Ersetzt werden ganze Zeilen (per ASCII-Praefix erkannt, damit die Erkennung
+# nicht an Umlauten oder Gedankenstrichen haengt), nicht Satzteile. Was der
+# Filter nicht erwischt, faengt assert_export_clean().
+sanitize_for_export() {
+  awk '
+    /^# model: / { next }
+    index($0, "Imperative Einzeiler.") == 1 {
+      print "Imperative Einzeiler. Narrative (Warum, konkrete Situation, How-to-apply) stehen als eigene Datei, nicht hier: projektuebergreifend Geltendes in einem eigenen Erkenntnis-Verzeichnis, projektspezifisches im Memory des jeweiligen Projekts. Verstoss gilt als Fehler, nicht als Nachlaessigkeit."
+      next
+    }
+    index($0, "**Ablageort nach Reichweite:**") == 1 {
+      print "**Ablageort nach Reichweite:** Gilt die Erkenntnis in jedem Projekt, gehoert sie in ein eigenes, projektuebergreifendes Verzeichnis samt Index. Gilt sie nur hier, ins Projekt-Memory. Das Memory ist **pro Arbeitsverzeichnis getrennt** — eine global gemeinte Regel dort landet in genau einem Silo. Nie in mehrere Silos kopieren: Kopien driften."
+      next
+    }
+    index($0, "- **\"Fertig\" nur mit Belegen.**") == 1 {
+      print "- **\"Fertig\" nur mit Belegen.** `git show HEAD --stat` gegen Commit-Message, Tests gruen mit zitierter Zahl, Architekten-Review abgenommen. Fehlt einer der drei: keine Fertig-Meldung, sondern die Luecke benennen."
+      next
+    }
+    { gsub(/ \(`feedback_[a-z_]+\.md`\)/, ""); print }
+  '
+}
+
+# Selbsttest des Filters: was danach noch nach Projektinterna aussieht, bricht
+# den Snapshot ab. Ohne diese Pruefung wuerde eine umformulierte Quellzeile den
+# Filter still ins Leere laufen lassen — ein Waechter, der nichts mehr faengt.
+EXPORT_DENYLIST='Metrys|metrys|BaroWatch|StarPath|Boatlog|SonoScale|Schein-oder-Sein|mac-main|Ledger|PO-Entscheid|feedback_[a-z_]*\.md|erkenntnisse|INDEX\.md'
+assert_export_clean() {
+  local datei="$1" treffer
+  # grep liefert bei null Treffern Exit 1 — unter 'set -e' wuerde der Erfolgsfall
+  # die Funktion abreissen. Deshalb das '|| true'.
+  treffer="$( { grep -o -E "$EXPORT_DENYLIST" "$datei" || true; } | sort -u | tr '\n' ' ')"
+  if [[ -n "$treffer" ]]; then
+    err "Export-Filter unvollstaendig — im erzeugten Block stehen noch: $treffer"
+  fi
+}
+
 # === Mode: snapshot-globals (Skript regeneriert eigene Embedded Templates) ===
 mode_snapshot_globals() {
   printf '%s\n' "$(msg header_snapshot_globals)"
@@ -915,13 +956,13 @@ mode_snapshot_globals() {
     printf '%s\n' "# === BEGIN AUTO-SNAPSHOT TEMPLATES ==="
     printf '%s\n' "tpl_global_claude_md() {"
     printf '%s\n' "  cat <<'GLOBAL_CLAUDE_END'"
-    cat "$CLAUDE_GLOBAL_DIR/CLAUDE.md"
+    sanitize_for_export < "$CLAUDE_GLOBAL_DIR/CLAUDE.md"
     printf '%s\n' "GLOBAL_CLAUDE_END"
     printf '%s\n' "}"
     printf '\n'
     printf '%s\n' "tpl_global_workflow_md() {"
     printf '%s\n' "  cat <<'GLOBAL_WORKFLOW_END'"
-    cat "$CLAUDE_GLOBAL_DIR/software-development-workflow.md"
+    sanitize_for_export < "$CLAUDE_GLOBAL_DIR/software-development-workflow.md"
     printf '%s\n' "GLOBAL_WORKFLOW_END"
     printf '%s\n' "}"
     for a in "${SUBAGENTS[@]}"; do
@@ -929,12 +970,14 @@ mode_snapshot_globals() {
       local fn="${a//-/_}"
       printf '%s\n' "tpl_agent_${fn}() {"
       printf '%s\n' "  cat <<'AGENT_END'"
-      cat "$CLAUDE_GLOBAL_DIR/agents/$a.md"
+      sanitize_for_export < "$CLAUDE_GLOBAL_DIR/agents/$a.md"
       printf '%s\n' "AGENT_END"
       printf '%s\n' "}"
     done
     printf '%s\n' "# === END AUTO-SNAPSHOT TEMPLATES ==="
   } > "$tmpblock"
+
+  assert_export_clean "$tmpblock"
 
   # Skript zusammensetzen: pre + neuer Block + post
   tmpscript="$(mktemp "${TMPDIR:-/tmp}/tatara-script.XXXXXX")"
@@ -1481,7 +1524,7 @@ tpl_global_claude_md() {
 Gilt für alle Projekte. Wird in jeder Session automatisch geladen.
 
 ## Präzedenz
-Projekt-CLAUDE.md schlägt diese Datei schlägt `software-development-workflow.md`. Ein Projekt darf eine globale Regel lockern oder verschärfen, wenn die Ausnahme **datiert, begründet und versioniert** im Projekt-Repo steht — eine Abweichung ohne Datum und Begründung ist Drift, kein Entscheid, und wird gemeldet. (`feedback_praezedenz_projekt_vor_global.md`)
+Projekt-CLAUDE.md schlägt diese Datei schlägt `software-development-workflow.md`. Ein Projekt darf eine globale Regel lockern oder verschärfen, wenn die Ausnahme **datiert, begründet und versioniert** im Projekt-Repo steht — eine Abweichung ohne Datum und Begründung ist Drift, kein Entscheid, und wird gemeldet.
 
 ## Sprache
 Antworte auf Deutsch. Code, Kommentare und Commit-Messages in der Sprache des Projekts.
@@ -1491,7 +1534,7 @@ Alle Rollen beherrschen die Projekt-Sprache auf Expertenniveau — Idiome, Stand
 
 ## Arbeitsregeln
 
-Imperative Einzeiler. Narrative (Warum, konkrete Situation, How-to-apply) stehen als eigene Datei — projektübergreifend in **`~/.claude/erkenntnisse/`** (Übersicht: dessen `INDEX.md`), projektspezifisch im Memory des jeweiligen Projekts. Referenz in Klammern; ohne Pfadangabe ist `erkenntnisse/` gemeint. Verstoß gilt als Fehler, nicht als Nachlässigkeit.
+Imperative Einzeiler. Narrative (Warum, konkrete Situation, How-to-apply) stehen als eigene Datei, nicht hier: projektuebergreifend Geltendes in einem eigenen Erkenntnis-Verzeichnis, projektspezifisches im Memory des jeweiligen Projekts. Verstoss gilt als Fehler, nicht als Nachlaessigkeit.
 
 ### Analyse & Design
 - **Code zuerst lesen.** Keine Änderung an Code, den man nicht kennt.
@@ -1499,29 +1542,29 @@ Imperative Einzeiler. Narrative (Warum, konkrete Situation, How-to-apply) stehen
 - **Ursachen statt Symptome.** Root-Cause-Analyse; keine Error-Unterdrückung, keine Hacks, keine TODO-Pflaster.
 - **Anforderungen abschnittsweise abhaken.** Jeden Unterabschnitt einzeln. "Überfliegen" ist Fehler, nicht Versehen.
 - **Abhängigkeiten zuerst analysieren.** Abhängigkeitsgraph + topologische Sortierung vor Namensgebung.
-- **Sauberen Pfad zuerst ableiten.** Bei jeder Mehr-Optionen-Frage (Architektur, Code-Qualität, Sicherheit) zuerst aus Memory + Architektur-Prinzipien den sauberen Pfad ableiten und explizit als `(Empfohlen, sauberer Pfad — Begründung: ...)` markieren. Trade-off-Optionen sind sekundär und nur dann legitim, wenn objektiv kein sauberer Pfad existiert (z.B. echte User-Präferenz). Anti-Pattern: Optionen als `Variante A / B` ohne Sauber-vs-Trade-off-Markierung. (`feedback_clean_path_mandate.md`)
-- **Prämisse vor Arbeit.** Ein Befund ist eine Hypothese: Prämisse gegen den aktuellen Stand prüfen, die naheliegende Ursache aktiv widerlegen, erwartetes Messergebnis **vor** dem Test benennen. Ab Klasse 1 als Tabelle: Hypothese | Beleg dafür | Beleg dagegen | ein Test | erwartetes Ergebnis. „Vorbestehend" nur mit Beleg. (`feedback_praemisse_vor_arbeit.md`)
-- **Eine Wahrheit, ein Ort.** Verweise symbolisch (Funktion, Überschrift), nie positionell (Zeilennummer — driftet). Listen abfragen statt abschreiben; statt der Zahl den Ableseweg dokumentieren. (`feedback_eine_wahrheit_ein_ort.md`)
+- **Sauberen Pfad zuerst ableiten.** Bei jeder Mehr-Optionen-Frage (Architektur, Code-Qualität, Sicherheit) zuerst aus Memory + Architektur-Prinzipien den sauberen Pfad ableiten und explizit als `(Empfohlen, sauberer Pfad — Begründung: ...)` markieren. Trade-off-Optionen sind sekundär und nur dann legitim, wenn objektiv kein sauberer Pfad existiert (z.B. echte User-Präferenz). Anti-Pattern: Optionen als `Variante A / B` ohne Sauber-vs-Trade-off-Markierung.
+- **Prämisse vor Arbeit.** Ein Befund ist eine Hypothese: Prämisse gegen den aktuellen Stand prüfen, die naheliegende Ursache aktiv widerlegen, erwartetes Messergebnis **vor** dem Test benennen. Ab Klasse 1 als Tabelle: Hypothese | Beleg dafür | Beleg dagegen | ein Test | erwartetes Ergebnis. „Vorbestehend" nur mit Beleg.
+- **Eine Wahrheit, ein Ort.** Verweise symbolisch (Funktion, Überschrift), nie positionell (Zeilennummer — driftet). Listen abfragen statt abschreiben; statt der Zahl den Ableseweg dokumentieren.
 
 ### Umsetzung
-- **Spezifikation 1:1 umsetzen, keine "pragmatischen" Abkürzungen.** Abweichung braucht Begründung **vor** der Implementierung, nicht als Rechtfertigung hinterher. (`feedback_finding_disposition.md`)
+- **Spezifikation 1:1 umsetzen, keine "pragmatischen" Abkürzungen.** Abweichung braucht Begründung **vor** der Implementierung, nicht als Rechtfertigung hinterher.
 - **Security, Performance, Konventionen von Anfang an.** Nicht nachträglich reingepatcht.
 - **Keine Annahmen ohne Tests.** "Sollte funktionieren" ist keine Aussage. Testregression vor jeder Umstrukturierung prüfen — Testanzahl vorher/nachher vergleichen.
 - **Eigenständig handeln.** Tools installieren, recherchieren, Voraussetzungen schaffen. User nur bei echten Architektur-Entscheidungen einbeziehen.
-- **Klasse schließen, nicht Instanz fixen.** Nach der Bauform sweepen, alle Aufrufstellen erfassen, jede geprüfte Stelle mit Urteil aufführen — auch die unveränderten. (`feedback_klasse_statt_instanz.md`)
-- **Prävention vor Detektion.** Nach dem Sweep der Wächter, der die nächste Instanz unmöglich macht. Ist ein Integrationstest durch den Produktionspfad nicht trivial möglich, ist die Architektur falsch — zurück zum Architekten, nicht „testen wir manuell". (`feedback_praevention_vor_detektion.md`)
-- **Die Prüfung ist selbst prüfbedürftig.** Wächter gegen eine unabhängige Quelle, Messobjekt so groß wie das Urteil, beide Richtungen, melden statt still reparieren. Nach dem Bau die Gegenprobe: absichtlich verletzen, sehen ob er anschlägt. Kennzahl ist Ziel-Finder, nie Optimierungsziel. (`feedback_pruefung_ist_pruefbeduerftig.md`)
+- **Klasse schließen, nicht Instanz fixen.** Nach der Bauform sweepen, alle Aufrufstellen erfassen, jede geprüfte Stelle mit Urteil aufführen — auch die unveränderten.
+- **Prävention vor Detektion.** Nach dem Sweep der Wächter, der die nächste Instanz unmöglich macht. Ist ein Integrationstest durch den Produktionspfad nicht trivial möglich, ist die Architektur falsch — zurück zum Architekten, nicht „testen wir manuell".
+- **Die Prüfung ist selbst prüfbedürftig.** Wächter gegen eine unabhängige Quelle, Messobjekt so groß wie das Urteil, beide Richtungen, melden statt still reparieren. Nach dem Bau die Gegenprobe: absichtlich verletzen, sehen ob er anschlägt. Kennzahl ist Ziel-Finder, nie Optimierungsziel.
 - **Irreversible Schritte vorher benennen.** Vor jedem nicht rückholbaren Schritt (Löschen, Überschreiben, Force-Push, Migration, Veröffentlichung) den Satz schreiben, dass er es ist — und was der Rückweg wäre, falls es einen gibt.
 
 ### Findings & Status
-- **Findings sofort beheben** (HIGH + MEDIUM). LOW nur wenn rein stilistisch. (`feedback_finding_disposition.md`)
+- **Findings sofort beheben** (HIGH + MEDIUM). LOW nur wenn rein stilistisch.
 - **Abgrenzungen mit konkretem Meilenstein.** "Später" ohne Phase bedeutet "nie". Design-Ausschlüsse gesondert markieren.
-- **"Fertig" nur mit Belegen.** `git show HEAD --stat` gegen Commit-Message, Tests grün mit zitierter Zahl, Architekten-Review abgenommen. Fehlt einer der drei: keine Fertig-Meldung, sondern die Lücke benennen. (Metrys mechanisiert das im Skill `.claude/skills/done/` — die Checkliste gilt auch ohne ihn.)
-- **Phasen funktional standalone schneiden** — keine Cross-Phase-Stub-Boundaries; eine Phase = eine Architektur-Frage. (`feedback_sprint_phase_design.md`)
+- **"Fertig" nur mit Belegen.** `git show HEAD --stat` gegen Commit-Message, Tests gruen mit zitierter Zahl, Architekten-Review abgenommen. Fehlt einer der drei: keine Fertig-Meldung, sondern die Luecke benennen.
+- **Phasen funktional standalone schneiden** — keine Cross-Phase-Stub-Boundaries; eine Phase = eine Architektur-Frage.
 - **Konstruktiv widersprechen.** Anweisungen, die dem Projektziel schaden, sachlich benennen; begründete User-Entscheidungen respektieren.
-- **Urteil nur aus der tragenden Instanz.** „Tests grün", „Build durch", „fertig" stammen aus dem Exit-Code bzw. der Ausgabe des Kommandos, das die Aussage trägt — keine Pipe dazwischen. Fehlt der erwartete positive Beleg (Bilanz, Trefferzahl, Exit-Code), gilt der Lauf als **nicht gelaufen**, nicht als wahrscheinlich grün. (`feedback_beleg_aus_der_tragenden_instanz.md`)
+- **Urteil nur aus der tragenden Instanz.** „Tests grün", „Build durch", „fertig" stammen aus dem Exit-Code bzw. der Ausgabe des Kommandos, das die Aussage trägt — keine Pipe dazwischen. Fehlt der erwartete positive Beleg (Bilanz, Trefferzahl, Exit-Code), gilt der Lauf als **nicht gelaufen**, nicht als wahrscheinlich grün.
 - **Unverifiziertes markieren, nicht weglassen.** Was nicht gegen die Quelle geprüft wurde, wird im Text als `[unverifiziert]` gekennzeichnet. Wer nicht prüfen will, markiert; wer nicht markieren will, prüft — stilles Behaupten fällt weg.
-- **Fragen-Ökonomie.** Keine Frage, die aus Code, Commit, Dokument oder früherer Aussage beantwortbar ist. Keine Rückversicherung nach abgeschlossenem Zwischenschritt. Beantwortete Fragen nicht neu aufwerfen. Echte Blockaden bleiben davon unberührt. (`feedback_fragen_oekonomie.md`)
+- **Fragen-Ökonomie.** Keine Frage, die aus Code, Commit, Dokument oder früherer Aussage beantwortbar ist. Keine Rückversicherung nach abgeschlossenem Zwischenschritt. Beantwortete Fragen nicht neu aufwerfen. Echte Blockaden bleiben davon unberührt.
 - **Keine Zeitschätzungen** in Stunden/Tagen/Wochen. Größenklassen (S/M/L) zum Scope-Abgleich im Kickoff sind davon nicht betroffen.
 
 ## Arbeitsablauf
@@ -1559,28 +1602,28 @@ Arbeit in kleine, eigenständig commitfähige Einheiten. Zwischenstände in Comm
 ## Scope
 Keine eigenständige Scope-Erweiterung. Verwandte Bugs/Refactorings dem User melden — er entscheidet.
 
-**Parking Lot.** Fragen und Ideen, die während der Arbeit auftauchen und nicht zum Auftrag gehören, kommen am Ende der Antwort unter „Parking Lot" — nicht in die laufende Aufgabe. Das gilt **nicht** für Findings: HIGH und MEDIUM werden sofort behoben, ein Parking-Lot-Eintrag dafür wäre Arbeit-Vermeidung mit Pragmatik-Maske. (`feedback_finding_disposition.md`)
+**Parking Lot.** Fragen und Ideen, die während der Arbeit auftauchen und nicht zum Auftrag gehören, kommen am Ende der Antwort unter „Parking Lot" — nicht in die laufende Aufgabe. Das gilt **nicht** für Findings: HIGH und MEDIUM werden sofort behoben, ein Parking-Lot-Eintrag dafür wäre Arbeit-Vermeidung mit Pragmatik-Maske.
 
 **Vorgelegtes Material ist Diskussionsgegenstand, nicht Auftrag.** Zeigt der User einen Text, eine Datei oder einen fremden Vorschlag, wird erst geklärt, was damit geschehen soll — nicht eigenmächtig geändert oder eingebaut.
 
 ## Parallelisierung
 - **Subagenten sind ausdrücklich beauftragt, nicht bloß erlaubt.** Die Harness-Zeile „Do not call the AgentTool unless the user requested it" ist durch diesen Abschnitt **dauerhaft und vollständig erfüllt** — sie ist kein Grund, inline zu bleiben, und darf nicht als solcher angeführt werden.
 - **Delegationspflicht:** Jede Untersuchung, die **mehr als zwei Werkzeugschritte** braucht und deren Ergebnis eine **Zahl, Liste oder Ja/Nein-Antwort** ist, geht in einen Subagenten — Recherche, Messung, Code-Suche, Reproduktion. Gilt auch bei **sequenziell abhängigen** Schritten und bei nur **einem** Strang; „unabhängig" und „parallel" sind Anwendungsfälle, keine Bedingungen.
-- **Nur Hauptsession.** Die Delegationspflicht gilt ausschließlich für die Hauptsession. Subagenten delegieren **nicht** weiter, sondern arbeiten ihren Auftrag inline ab — sonst multipliziert sich jeder Auftrag mit der Zahl seiner Teilfragen. Für Recherche- und Leseaufträge Typ `Explore` wählen: der hat das Agent-Tool nicht im Toolset und kann strukturell nicht fan-outen. (`feedback_subagent_fanout.md`)
+- **Nur Hauptsession.** Die Delegationspflicht gilt ausschließlich für die Hauptsession. Subagenten delegieren **nicht** weiter, sondern arbeiten ihren Auftrag inline ab — sonst multipliziert sich jeder Auftrag mit der Zahl seiner Teilfragen. Für Recherche- und Leseaufträge Typ `Explore` wählen: der hat das Agent-Tool nicht im Toolset und kann strukturell nicht fan-outen.
 - **Grund:** Nicht Geschwindigkeit, sondern Kontext-Hygiene. Fehlversuche, Zwischenausgaben und verworfene Skripte gehören nicht in den Hauptkontext — dort zählt nur das Ergebnis. Ein verstopfter Hauptkontext senkt die Qualität aller folgenden Entscheidungen.
 - **Inline bleibt:** kurze Verifikation (1–2 Aufrufe), das Bauen selbst, und Schritte, deren Zwischenstand die nächste Entscheidung unmittelbar trägt.
 - **Umsetzung:** sequenziell, Schritt für Schritt.
 - **Nach Umsetzung:** QA parallel zu weiteren Aufgaben.
-- **Auftrags-Hygiene:** Jeder Auftrag ist self-contained — absolute Pfade, Constraints, gewünschtes Ergebnisformat, ausdrückliche Grenze („nur Ist-Zustand, keine Empfehlungen"). Der Subagent sieht den Eltern-Kontext nicht. (`feedback_delegations_hygiene.md`)
+- **Auftrags-Hygiene:** Jeder Auftrag ist self-contained — absolute Pfade, Constraints, gewünschtes Ergebnisformat, ausdrückliche Grenze („nur Ist-Zustand, keine Empfehlungen"). Der Subagent sieht den Eltern-Kontext nicht.
 - **Fortschritt positiv prüfen.** Ein laufender Kindprozess ist kein Beleg für Fortschritt; ausbleibende Meldung ist kein Beleg für Arbeit. Mehrere Agenten an derselben Wartebedingung sind kein Parallelbetrieb.
 - **Fremde Angaben nachprüfen.** Zahlen, Zitate und Zeilenangaben aus einem Subagenten-Bericht vor dem Weiterreichen oder Einbauen gegen die Quelle prüfen — Subagenten driften genau dort.
 
 ## Wissenserhalt
 Erkenntnisse festhalten — gelöste Probleme, Architektur-Entscheidungen, Lessons Learned. Proaktiv sichern, nicht auf Aufforderung warten. Narrative Form mit Why + How-to-apply, nicht als weitere Regelsammlung (die gehört hierher).
 
-**Ablageort nach Reichweite:** Gilt die Erkenntnis in jedem Projekt, gehört sie nach `~/.claude/erkenntnisse/` samt Zeile in dessen `INDEX.md`. Gilt sie nur hier, ins Projekt-Memory. Das Memory ist **pro Arbeitsverzeichnis getrennt** — eine global gemeinte Regel dort landet in genau einem Silo. Nie in mehrere Silos kopieren: Kopien driften (`feedback_subagent_fanout.md`).
+**Ablageort nach Reichweite:** Gilt die Erkenntnis in jedem Projekt, gehoert sie in ein eigenes, projektuebergreifendes Verzeichnis samt Index. Gilt sie nur hier, ins Projekt-Memory. Das Memory ist **pro Arbeitsverzeichnis getrennt** — eine global gemeinte Regel dort landet in genau einem Silo. Nie in mehrere Silos kopieren: Kopien driften.
 
-**Ablage vor Formulierung.** Was **garantiert immer** passieren muss, gehört in einen Hook. Was das Modell **wissen** muss, in diese Datei (imperativer Einzeiler) oder ins Memory (Narrativ). Ein Verhaltenswunsch im Memory ist eine Bitte, kein Mechanismus — wiederholt sich ein Verstoß trotz Eintrag, ist das kein Anlass für schärfere Worte, sondern für einen Hook. (`feedback_steuerungs_hierarchie.md`)
+**Ablage vor Formulierung.** Was **garantiert immer** passieren muss, gehört in einen Hook. Was das Modell **wissen** muss, in diese Datei (imperativer Einzeiler) oder ins Memory (Narrativ). Ein Verhaltenswunsch im Memory ist eine Bitte, kein Mechanismus — wiederholt sich ein Verstoß trotz Eintrag, ist das kein Anlass für schärfere Worte, sondern für einen Hook.
 GLOBAL_CLAUDE_END
 }
 
@@ -1823,7 +1866,6 @@ tpl_agent_architect() {
 name: architect
 description: Plant Software-Aufgaben. Liest Spec + bestehenden Code, entwirft Plan mit Akzeptanzkriterien, Testspezifikation, Abhängigkeitsanalyse und Risiken. Implementiert nie. Nutze diesen Agenten zu Beginn jeder nicht-trivialen Aufgabe — bevor Tests geschrieben oder Code geändert wird.
 tools: Read, Grep, Glob, Agent, Write, WebFetch, WebSearch
-# model: opus — PO-Entscheid 2026-07-29: Opus ist der STANDARD fuer diese Rolle (nicht mehr fable). Datenlage: fable-Plaene kamen mit 6 bzw. 3 HIGH aus dem Review, der opus-Plan mit 1 HIGH bei gleichen Kosten. fable NUR als begruendeter Einzelfall bei crate-uebergreifender Haerte (>=3 Crates / metrys-api-Vertragsaenderung / widerlegte Praemissen) und NUR nach Genehmigung durch mac-main, Begruendung vorher im Ledger. Siehe Memory project_subagent_model_assignment.
 model: opus
 memory: project
 ---
@@ -1897,7 +1939,6 @@ tpl_agent_architect_reviewer() {
 name: architect-reviewer
 description: Unabhängige Second-Opinion zum Plan des Architekten. Prüft Spec-Konformität, Vollständigkeit, Abhängigkeits-Logik, Querschnittsthemen, FK-Alignment — bevor der Plan dem User zur Freigabe vorgelegt wird. Nutze diesen Agenten NACH dem Architekten und VOR User-Freigabe.
 tools: Read, Grep, Glob, WebFetch
-# model: opus — PO-Entscheid 2026-07-29: Opus ist der STANDARD fuer diese Rolle (nicht mehr fable). Datenlage: fable-Plaene kamen mit 6 bzw. 3 HIGH aus dem Review, der opus-Plan mit 1 HIGH bei gleichen Kosten. fable NUR als begruendeter Einzelfall bei crate-uebergreifender Haerte (>=3 Crates / metrys-api-Vertragsaenderung / widerlegte Praemissen) und NUR nach Genehmigung durch mac-main, Begruendung vorher im Ledger. Siehe Memory project_subagent_model_assignment.
 model: opus
 memory: project
 ---
