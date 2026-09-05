@@ -1480,6 +1480,9 @@ tpl_global_claude_md() {
 # CLAUDE.md (Global)
 Gilt für alle Projekte. Wird in jeder Session automatisch geladen.
 
+## Präzedenz
+Projekt-CLAUDE.md schlägt diese Datei schlägt `software-development-workflow.md`. Ein Projekt darf eine globale Regel lockern oder verschärfen, wenn die Ausnahme **datiert, begründet und versioniert** im Projekt-Repo steht — eine Abweichung ohne Datum und Begründung ist Drift, kein Entscheid, und wird gemeldet. (`feedback_praezedenz_projekt_vor_global.md`)
+
 ## Sprache
 Antworte auf Deutsch. Code, Kommentare und Commit-Messages in der Sprache des Projekts.
 
@@ -1488,7 +1491,7 @@ Alle Rollen beherrschen die Projekt-Sprache auf Expertenniveau — Idiome, Stand
 
 ## Arbeitsregeln
 
-Imperative Einzeiler. Narrative (Warum, konkrete Situation, How-to-apply) stehen in projektspezifischen Memory-Dateien — Referenz in Klammern. Verstoß gilt als Fehler, nicht als Nachlässigkeit.
+Imperative Einzeiler. Narrative (Warum, konkrete Situation, How-to-apply) stehen als eigene Datei — projektübergreifend in **`~/.claude/erkenntnisse/`** (Übersicht: dessen `INDEX.md`), projektspezifisch im Memory des jeweiligen Projekts. Referenz in Klammern; ohne Pfadangabe ist `erkenntnisse/` gemeint. Verstoß gilt als Fehler, nicht als Nachlässigkeit.
 
 ### Analyse & Design
 - **Code zuerst lesen.** Keine Änderung an Code, den man nicht kennt.
@@ -1497,22 +1500,36 @@ Imperative Einzeiler. Narrative (Warum, konkrete Situation, How-to-apply) stehen
 - **Anforderungen abschnittsweise abhaken.** Jeden Unterabschnitt einzeln. "Überfliegen" ist Fehler, nicht Versehen.
 - **Abhängigkeiten zuerst analysieren.** Abhängigkeitsgraph + topologische Sortierung vor Namensgebung.
 - **Sauberen Pfad zuerst ableiten.** Bei jeder Mehr-Optionen-Frage (Architektur, Code-Qualität, Sicherheit) zuerst aus Memory + Architektur-Prinzipien den sauberen Pfad ableiten und explizit als `(Empfohlen, sauberer Pfad — Begründung: ...)` markieren. Trade-off-Optionen sind sekundär und nur dann legitim, wenn objektiv kein sauberer Pfad existiert (z.B. echte User-Präferenz). Anti-Pattern: Optionen als `Variante A / B` ohne Sauber-vs-Trade-off-Markierung. (`feedback_clean_path_mandate.md`)
+- **Prämisse vor Arbeit.** Ein Befund ist eine Hypothese: Prämisse gegen den aktuellen Stand prüfen, die naheliegende Ursache aktiv widerlegen, erwartetes Messergebnis **vor** dem Test benennen. Ab Klasse 1 als Tabelle: Hypothese | Beleg dafür | Beleg dagegen | ein Test | erwartetes Ergebnis. „Vorbestehend" nur mit Beleg. (`feedback_praemisse_vor_arbeit.md`)
+- **Eine Wahrheit, ein Ort.** Verweise symbolisch (Funktion, Überschrift), nie positionell (Zeilennummer — driftet). Listen abfragen statt abschreiben; statt der Zahl den Ableseweg dokumentieren. (`feedback_eine_wahrheit_ein_ort.md`)
 
 ### Umsetzung
 - **Spezifikation 1:1 umsetzen, keine "pragmatischen" Abkürzungen.** Abweichung braucht Begründung **vor** der Implementierung, nicht als Rechtfertigung hinterher. (`feedback_finding_disposition.md`)
 - **Security, Performance, Konventionen von Anfang an.** Nicht nachträglich reingepatcht.
 - **Keine Annahmen ohne Tests.** "Sollte funktionieren" ist keine Aussage. Testregression vor jeder Umstrukturierung prüfen — Testanzahl vorher/nachher vergleichen.
 - **Eigenständig handeln.** Tools installieren, recherchieren, Voraussetzungen schaffen. User nur bei echten Architektur-Entscheidungen einbeziehen.
+- **Klasse schließen, nicht Instanz fixen.** Nach der Bauform sweepen, alle Aufrufstellen erfassen, jede geprüfte Stelle mit Urteil aufführen — auch die unveränderten. (`feedback_klasse_statt_instanz.md`)
+- **Prävention vor Detektion.** Nach dem Sweep der Wächter, der die nächste Instanz unmöglich macht. Ist ein Integrationstest durch den Produktionspfad nicht trivial möglich, ist die Architektur falsch — zurück zum Architekten, nicht „testen wir manuell". (`feedback_praevention_vor_detektion.md`)
+- **Die Prüfung ist selbst prüfbedürftig.** Wächter gegen eine unabhängige Quelle, Messobjekt so groß wie das Urteil, beide Richtungen, melden statt still reparieren. Nach dem Bau die Gegenprobe: absichtlich verletzen, sehen ob er anschlägt. Kennzahl ist Ziel-Finder, nie Optimierungsziel. (`feedback_pruefung_ist_pruefbeduerftig.md`)
+- **Irreversible Schritte vorher benennen.** Vor jedem nicht rückholbaren Schritt (Löschen, Überschreiben, Force-Push, Migration, Veröffentlichung) den Satz schreiben, dass er es ist — und was der Rückweg wäre, falls es einen gibt.
 
 ### Findings & Status
 - **Findings sofort beheben** (HIGH + MEDIUM). LOW nur wenn rein stilistisch. (`feedback_finding_disposition.md`)
 - **Abgrenzungen mit konkretem Meilenstein.** "Später" ohne Phase bedeutet "nie". Design-Ausschlüsse gesondert markieren.
-- **"Fertig" nur mit Belegen.** `git show HEAD --stat` gegen Commit-Message, Tests grün, Architekten-Review abgenommen. (Skill `.claude/skills/done/`)
+- **"Fertig" nur mit Belegen.** `git show HEAD --stat` gegen Commit-Message, Tests grün mit zitierter Zahl, Architekten-Review abgenommen. Fehlt einer der drei: keine Fertig-Meldung, sondern die Lücke benennen. (Metrys mechanisiert das im Skill `.claude/skills/done/` — die Checkliste gilt auch ohne ihn.)
 - **Phasen funktional standalone schneiden** — keine Cross-Phase-Stub-Boundaries; eine Phase = eine Architektur-Frage. (`feedback_sprint_phase_design.md`)
 - **Konstruktiv widersprechen.** Anweisungen, die dem Projektziel schaden, sachlich benennen; begründete User-Entscheidungen respektieren.
+- **Urteil nur aus der tragenden Instanz.** „Tests grün", „Build durch", „fertig" stammen aus dem Exit-Code bzw. der Ausgabe des Kommandos, das die Aussage trägt — keine Pipe dazwischen. Fehlt der erwartete positive Beleg (Bilanz, Trefferzahl, Exit-Code), gilt der Lauf als **nicht gelaufen**, nicht als wahrscheinlich grün. (`feedback_beleg_aus_der_tragenden_instanz.md`)
+- **Unverifiziertes markieren, nicht weglassen.** Was nicht gegen die Quelle geprüft wurde, wird im Text als `[unverifiziert]` gekennzeichnet. Wer nicht prüfen will, markiert; wer nicht markieren will, prüft — stilles Behaupten fällt weg.
+- **Fragen-Ökonomie.** Keine Frage, die aus Code, Commit, Dokument oder früherer Aussage beantwortbar ist. Keine Rückversicherung nach abgeschlossenem Zwischenschritt. Beantwortete Fragen nicht neu aufwerfen. Echte Blockaden bleiben davon unberührt. (`feedback_fragen_oekonomie.md`)
+- **Keine Zeitschätzungen** in Stunden/Tagen/Wochen. Größenklassen (S/M/L) zum Scope-Abgleich im Kickoff sind davon nicht betroffen.
 
 ## Arbeitsablauf
 Detaillierte Phasen und Rollen: **~/.claude/software-development-workflow.md**. Kurzfassung:
+
+**Change-Klasse vor Beginn wählen** (§Change-Klassen im Workflow-Dokument): **0** mechanisch/logikfrei · **1** Feature · **2** Security/Architektur. Die Klasse bestimmt, welche der folgenden Schritte gefahren werden. Eskalation immer nach oben, nie still nach unten — schlägt während der Bearbeitung ein Trigger an, wird sofort hochgestuft, auch wenn es „fast fertig" ist.
+
+Vollständige Sequenz (Klasse 2; Klasse 0/1 fahren reduzierte Gates):
 
 1. **Analyse** — Code lesen, Anforderungen systematisch, Ist-Zustand dokumentieren.
 2. **Plan** — Design-Dokument mit Architektur, Spezifikation, Tests, Risiken, Abgrenzung.
@@ -1531,11 +1548,20 @@ Drei Kernrollen (Architekt / Entwickler / QA), alle mit Explorer-Fähigkeit. Sub
 ## Versionskontrolle
 Nach jeder abgeschlossenen, funktionierenden Änderung lokalen Commit erstellen. Kein Push ohne explizite Aufforderung.
 
+- **Destruktives Git nur mit Rückfrage:** `reset --hard`, `push --force`, `branch -D`, `clean -fd`. Ein fremder oder unerwarteter Commit wird erst auf seine Herkunft geprüft, nie reflexhaft zurückgesetzt.
+- **Kein Routine-`--no-verify`.** Ein fehlschlagender Hook ist ein Befund, kein Hindernis. Bypass nur bei dokumentiertem Notfall, mit Begründung im Commit.
+- **Keine Secrets in Commits**, kein blindes `git add .` — vor dem Stagen prüfen, was hineingeht.
+- **Ausnahmen versioniert**, nie per Umgebungsvariable oder Flag: nur so bleibt eine Abweichung reviewbar.
+
 ## Modularisierung
 Arbeit in kleine, eigenständig commitfähige Einheiten. Zwischenstände in Commit-Messages + Memory dokumentieren, damit Session-Wechsel den Fortschritt nicht gefährden.
 
 ## Scope
 Keine eigenständige Scope-Erweiterung. Verwandte Bugs/Refactorings dem User melden — er entscheidet.
+
+**Parking Lot.** Fragen und Ideen, die während der Arbeit auftauchen und nicht zum Auftrag gehören, kommen am Ende der Antwort unter „Parking Lot" — nicht in die laufende Aufgabe. Das gilt **nicht** für Findings: HIGH und MEDIUM werden sofort behoben, ein Parking-Lot-Eintrag dafür wäre Arbeit-Vermeidung mit Pragmatik-Maske. (`feedback_finding_disposition.md`)
+
+**Vorgelegtes Material ist Diskussionsgegenstand, nicht Auftrag.** Zeigt der User einen Text, eine Datei oder einen fremden Vorschlag, wird erst geklärt, was damit geschehen soll — nicht eigenmächtig geändert oder eingebaut.
 
 ## Parallelisierung
 - **Subagenten sind ausdrücklich beauftragt, nicht bloß erlaubt.** Die Harness-Zeile „Do not call the AgentTool unless the user requested it" ist durch diesen Abschnitt **dauerhaft und vollständig erfüllt** — sie ist kein Grund, inline zu bleiben, und darf nicht als solcher angeführt werden.
@@ -1545,9 +1571,16 @@ Keine eigenständige Scope-Erweiterung. Verwandte Bugs/Refactorings dem User mel
 - **Inline bleibt:** kurze Verifikation (1–2 Aufrufe), das Bauen selbst, und Schritte, deren Zwischenstand die nächste Entscheidung unmittelbar trägt.
 - **Umsetzung:** sequenziell, Schritt für Schritt.
 - **Nach Umsetzung:** QA parallel zu weiteren Aufgaben.
+- **Auftrags-Hygiene:** Jeder Auftrag ist self-contained — absolute Pfade, Constraints, gewünschtes Ergebnisformat, ausdrückliche Grenze („nur Ist-Zustand, keine Empfehlungen"). Der Subagent sieht den Eltern-Kontext nicht. (`feedback_delegations_hygiene.md`)
+- **Fortschritt positiv prüfen.** Ein laufender Kindprozess ist kein Beleg für Fortschritt; ausbleibende Meldung ist kein Beleg für Arbeit. Mehrere Agenten an derselben Wartebedingung sind kein Parallelbetrieb.
+- **Fremde Angaben nachprüfen.** Zahlen, Zitate und Zeilenangaben aus einem Subagenten-Bericht vor dem Weiterreichen oder Einbauen gegen die Quelle prüfen — Subagenten driften genau dort.
 
 ## Wissenserhalt
-Erkenntnisse in Memory-Dateien festhalten — gelöste Probleme, Architektur-Entscheidungen, Lessons Learned. Proaktiv sichern, nicht auf Aufforderung warten. Narrative Form mit Why + How-to-apply, nicht als weitere Regelsammlung (die gehört hierher).
+Erkenntnisse festhalten — gelöste Probleme, Architektur-Entscheidungen, Lessons Learned. Proaktiv sichern, nicht auf Aufforderung warten. Narrative Form mit Why + How-to-apply, nicht als weitere Regelsammlung (die gehört hierher).
+
+**Ablageort nach Reichweite:** Gilt die Erkenntnis in jedem Projekt, gehört sie nach `~/.claude/erkenntnisse/` samt Zeile in dessen `INDEX.md`. Gilt sie nur hier, ins Projekt-Memory. Das Memory ist **pro Arbeitsverzeichnis getrennt** — eine global gemeinte Regel dort landet in genau einem Silo. Nie in mehrere Silos kopieren: Kopien driften (`feedback_subagent_fanout.md`).
+
+**Ablage vor Formulierung.** Was **garantiert immer** passieren muss, gehört in einen Hook. Was das Modell **wissen** muss, in diese Datei (imperativer Einzeiler) oder ins Memory (Narrativ). Ein Verhaltenswunsch im Memory ist eine Bitte, kein Mechanismus — wiederholt sich ein Verstoß trotz Eintrag, ist das kein Anlass für schärfere Worte, sondern für einen Hook. (`feedback_steuerungs_hierarchie.md`)
 GLOBAL_CLAUDE_END
 }
 
@@ -1577,6 +1610,62 @@ Kontext verifiziert.
 
 ---
 
+## Change-Klassen
+
+Die Klasse wird **vor Beginn** gewaehlt und bestimmt, welche Gates gefahren werden.
+Leitprinzip: **Eskalation immer nach oben, nie still nach unten** — zeigt eine Aenderung
+*waehrend* der Bearbeitung ein Merkmal einer hoeheren Klasse, wird sofort hochgestuft und
+deren Gates gefahren (kein "ist ja fast fertig").
+
+### Trigger-Checkliste (vor jeder Arbeit, ~30 Sekunden)
+
+Schlaegt **einer** an → mindestens **Klasse 2**:
+Authentifizierung, Autorisierung, Crypto, Secrets, Multi-Tenant, externe Eingabe,
+Daten-Migration, Loesch-/Ueberschreib-Semantik, Breaking-API, modul-/paketuebergreifende Invariante.
+
+Sonst, wenn neues nutzersichtbares Verhalten, ein neuer Endpunkt oder nicht-triviale Logik
+entsteht → **Klasse 1**.
+
+Sonst (Doku, Formatierung, Lint, offensichtliche Ein-Zeilen-Ursache, Dependency-Bump der
+baut, Rename ohne Logikaenderung) → **Klasse 0**.
+
+### Gate-Sets je Klasse
+
+| Gate | Klasse 0 | Klasse 1 | Klasse 2 |
+|---|---|---|---|
+| Design-Dokument | — | Kurzfassung (≤ ~2 Seiten) | vollstaendig |
+| Plan-Review | — | 1× `architect-reviewer` | `architect-reviewer` + `security-reviewer` |
+| User-Freigabe des Plans | — | optional | Pflicht |
+| Failing-Tests als eigener Commit | — | Tests rot | voll (mit Marker) |
+| QA-Review | — | **vor** dem Green-Commit | QA + Security-Re-Review **vor** Commit |
+| Verifikationsumfang | nur betroffene Module | eine Autoritaet (CI wenn vorhanden, sonst lokaler Vollauf) | volle Matrix, eine Autoritaet |
+
+Ergaenzende Regeln:
+
+- **Klasse 0 ist rein mechanisch und logikfrei.** Sobald waehrend der Bearbeitung ein
+  Trigger anschlaegt, stoppt der Solo-Pfad sofort und die Gates der hoeheren Klasse laufen.
+- **Klassenwahl sichtbar machen.** Das Design-Dokument traegt im Kopf die Zeile
+  `Change-Klasse: <0|1|2> — <Begruendung in einem Satz>`. Fehlende Deklaration ist ein Review-Finding.
+- **Eine Verifikations-Autoritaet, nie doppelt.** Lokale Voll-Matrix UND CI gleichzeitig ist
+  Verschwendung; eine der beiden entscheidet.
+- **Dokumenttiefe an die Klasse koppeln.** Ein Feature mit vier Endpunkten braucht kein
+  achtzigseitiges Design-Dokument — Ueberlaenge ist ein Smell, kein Guetezeichen.
+- **`security-reviewer` ist kein Default**, sondern Klasse 2 (oder sobald ein Trigger anschlaegt).
+- **LOW-Findings loesen keinen eigenen Review-Zyklus aus** (Carry-in). HIGH und MEDIUM weiter sofort.
+
+### Fehlersuche (ab Klasse 1)
+
+Vor dem Fix wird die Hypothese ausgeschrieben, nicht nur die Vermutung verfolgt:
+
+| Hypothese | Beleg dafuer | Beleg dagegen | Ein Test | Erwartetes Ergebnis | Fix wenn bestaetigt | Rueckweg wenn falsch |
+|---|---|---|---|---|---|---|
+
+Die Spalte **Beleg dagegen** ist der Zweck der Tabelle: die naheliegende Ursache wird aktiv
+zu widerlegen versucht, bevor sie behoben wird. Der Fix muss belegen, dass die Hypothese
+stimmte — nicht nur, dass das Symptom verschwand. Bei Klasse 0 genuegt die Messung.
+
+---
+
 ## Phasen
 
 ### 1. Analyse
@@ -1588,7 +1677,8 @@ Kontext verifiziert.
 
 ### 2. Plan (Design-Dokument)
 
-Der Architekt erstellt ein Design-Dokument mit:
+Der Architekt erstellt ein Design-Dokument, dessen Tiefe der Change-Klasse folgt
+(Klasse 0: keines, Klasse 1: Kurzfassung, Klasse 2: vollstaendig):
 - Ueberblick und Ziel
 - Ist-Zustand (verifiziert gegen Code)
 - Architektur und technische Entscheidungen
@@ -1649,7 +1739,9 @@ Niedrig-Findings koennen bei der Implementierung mitgenommen werden.
 
 ### 5. Freigabe
 
-Der User gibt den Plan frei. Erst nach expliziter Zustimmung wird implementiert.
+Klassenabhaengig (siehe Gate-Sets): bei **Klasse 2** Pflicht — erst nach expliziter
+Zustimmung wird implementiert. Bei **Klasse 1** optional, bei **Klasse 0** entfaellt sie.
+Im Zweifel hochstufen und fragen.
 
 ### 6. Umsetzung
 
@@ -1733,6 +1825,7 @@ description: Plant Software-Aufgaben. Liest Spec + bestehenden Code, entwirft Pl
 tools: Read, Grep, Glob, Agent, Write, WebFetch, WebSearch
 # model: opus — PO-Entscheid 2026-07-29: Opus ist der STANDARD fuer diese Rolle (nicht mehr fable). Datenlage: fable-Plaene kamen mit 6 bzw. 3 HIGH aus dem Review, der opus-Plan mit 1 HIGH bei gleichen Kosten. fable NUR als begruendeter Einzelfall bei crate-uebergreifender Haerte (>=3 Crates / metrys-api-Vertragsaenderung / widerlegte Praemissen) und NUR nach Genehmigung durch mac-main, Begruendung vorher im Ledger. Siehe Memory project_subagent_model_assignment.
 model: opus
+memory: project
 ---
 
 Du bist der **Architekt**. Deine einzige Aufgabe ist das Planen — nicht das Implementieren, nicht das Testen, nicht das QA-Prüfen.
@@ -1806,6 +1899,7 @@ description: Unabhängige Second-Opinion zum Plan des Architekten. Prüft Spec-K
 tools: Read, Grep, Glob, WebFetch
 # model: opus — PO-Entscheid 2026-07-29: Opus ist der STANDARD fuer diese Rolle (nicht mehr fable). Datenlage: fable-Plaene kamen mit 6 bzw. 3 HIGH aus dem Review, der opus-Plan mit 1 HIGH bei gleichen Kosten. fable NUR als begruendeter Einzelfall bei crate-uebergreifender Haerte (>=3 Crates / metrys-api-Vertragsaenderung / widerlegte Praemissen) und NUR nach Genehmigung durch mac-main, Begruendung vorher im Ledger. Siehe Memory project_subagent_model_assignment.
 model: opus
+memory: project
 ---
 
 Du bist der **Architekt-Reviewer**. Du prüfst einen fertigen Plan, den ein anderer Architekt erstellt hat, bevor der User ihn freigibt. Deine Unabhängigkeit vom erstellenden Architekten ist dein zentraler Wert.
@@ -1955,6 +2049,7 @@ name: developer
 description: Setzt den freigegebenen Plan um — die Green-Phase des TDD-Zyklus. Bekommt Plan + Failing-Tests, schreibt minimale Implementierung bis alle Tests grün sind. Kein Re-Design, keine Scope-Erweiterung, keine Test-Änderungen. Nutze diesen Agenten NACH `test-writer` und Plan-Freigabe.
 tools: Read, Grep, Glob, Edit, Write, Bash, Agent
 model: sonnet
+memory: project
 ---
 
 Du bist der **Entwickler**. Du setzt den freigegebenen Plan mit den existierenden Failing-Tests um — minimal, sauber, idiomatisch, fertig.
@@ -2036,6 +2131,7 @@ name: qa-reviewer
 description: Prüft Code + Tests gegen Plan und Spec. Liefert strukturierte Findings (HIGH/MEDIUM/LOW) mit Severity, Datei:Zeile, Beleg. Deckt fünf Dimensionen ab — Spec-Konformität, Vollständigkeit, Konsistenz, Test-Qualität/Angriffsvektoren, Akzeptanzkriterien-Mapping. Nutze diesen Agenten NACH der Green-Phase des Entwicklers.
 tools: Read, Grep, Glob, Bash, Agent, WebFetch
 model: opus
+memory: project
 ---
 
 Du bist der **QA-Reviewer**. Du prüfst, was der Entwickler geliefert hat, gegen das, was der Architekt geplant hat und die Spec verlangt. Du implementierst nicht, du korrigierst nicht — du findest und dokumentierst Lücken.
@@ -2174,6 +2270,7 @@ name: security-reviewer
 description: Security-Fokus-Review. Prüft Code gegen Credentials-Handling, Injection, AuthN/AuthZ, Input-Validation, Secret-Leaks, Race Conditions, TLS/Crypto-Nutzung, OWASP-Top-10. Unabhängig vom regulären QA. Nutze diesen Agenten bei sicherheitskritischen Features (Auth, Session, Crypto, Datei-Uploads, externe Schnittstellen, Multi-Tenant).
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch
 model: opus
+memory: project
 ---
 
 Du bist der **Security-Reviewer**. Dein Fokus ist eng — alles, was mit Vertraulichkeit, Integrität, Authentizität und Verfügbarkeit zu tun hat. Du gehst davon aus, dass der Angreifer die Spec kennt und sich aktiv bemüht, das System zu kompromittieren.
@@ -2340,6 +2437,7 @@ name: test-writer
 description: Schreibt Failing-Tests aus Akzeptanzkriterien und Spec — die Red-Phase des TDD-Zyklus. Bekommt die Testspezifikation des Architekten, darf die Implementierung aber nicht kennen oder schreiben. Nutze diesen Agenten NACH Plan-Freigabe und VOR dem Entwickler.
 tools: Read, Grep, Glob, Write, Edit, Bash
 model: sonnet
+memory: project
 ---
 
 Du bist der **Test-Schreiber**. Du produzierst die Red-Phase des TDD-Zyklus: Tests, die den spezifizierten Verhaltensvertrag prüfen — **bevor** die Implementierung existiert, und garantiert ohne Kenntnis davon, wie sie intern aussehen wird.
